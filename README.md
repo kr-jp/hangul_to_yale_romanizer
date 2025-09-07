@@ -16,7 +16,7 @@
 ---
 
 ## 使い方
-- インターネットに接続可能な環境では[ウェブアプリケーション](https://hangul-yale-romanizer.netlify.app/)に接続
+- インターネットに接続可能な環境では<a href="https://hangul-yale-romanizer.netlify.app" target="_blank" rel="noopener noreferrer">ウェブアプリケーション</a>に接続
 
 - インターネットに接続できない環境では、ファイルをローカルにダウンロードし、`index.html`を開くことですぐに利用可能
 
@@ -25,15 +25,17 @@
 ## コピー機能
 - 「変換結果コピー」ボタンを押すと、「変換結果」に表示されている内容を、半角空白の代わりに「タブ」を挿入してコピーします。
 - 半角空白を保持したままコピーをするには、「変換結果」にある内容をドラッグ＆ドロップすることで、コピーできます。
-- 「ハングルと並べて見る」に表示されている内容は、例文をクリックすることで、「タブ」を挿入してコピーします。
+- 「ハングルと並べて見る」に表示されている内容は、例文をクリックすると、「タブ」を挿入してコピーします。
+
+「タブ」を挿入してコピーをしている理由は、Wordなどで<a href="https://ja.wikipedia.org/wiki/%E3%82%B0%E3%83%AD%E3%82%B9_(%E8%A8%80%E8%AA%9E%E5%AD%A6)" target="_blank" rel="noopener noreferrer">グロス</a>を入力するときに、上下の列を調整するのが便利だからです。
 
 ---
 
 ## スクリーンショット
 <p align="center">
-  <img src="assets/screenshots/screencapture.png" width="160" alt="Hangul → Yale Romanizer logo">
+  <img src="assets/screenshots/screencapture.png" alt="Hangul → Yale Romanizer logo">
 </p>
- 
+
 ---
 
 ## ライセンス
