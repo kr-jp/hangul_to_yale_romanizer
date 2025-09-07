@@ -1,0 +1,128 @@
+<!doctype html>
+  <html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hangul → Yale Romanizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css" />
+    <link rel="icon" href="assets/logo/favicon.png">
+  </head>
+  <body>
+    <header class="header">
+      <h1>한글 → Yale Romanizer</h1>
+      <p class="sub">退屈なことは機械にやらせよう</p>
+      <div class="header-actions">
+        <button id="openHist" class="btn btn-ghost" aria-controls="historyDrawer" aria-expanded="false"></button>
+        <button id="openRef" class="btn btn-ghost" aria-controls="refDrawer" aria-expanded="false"></button>
+        <button id="themeToggle" class="btn btn-ghost" aria-pressed="false" title="テーマ切替">🌓</button>
+        <button id="langToggle" class="btn btn-ghost" aria-pressed="false" title="言語切替"></button>
+        <a class="btn btn-link" href="https://github.com/kr-jp/hangul_to_yale_romanizer" target="_blank" rel="noopener">Usage</a>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="panel">
+        <label for="input" id="labelInput" class="label">入力（ハングル）</label>
+        <textarea id="input" class="textarea" placeholder="입력 대기 중" rows="4"></textarea>
+
+        <div class="controls">
+          <label class="switch">
+            <input id="labialRule" type="checkbox" checked />
+            <span class="slider" aria-hidden="true"></span>
+            <span id="labelLabial" class="switch-label"></span>
+          </label>
+
+          <!-- interlinear first -->
+          <label class="switch">
+            <input id="interlinearMode" type="checkbox" checked />
+            <span class="slider" aria-hidden="true"></span>
+            <span id="labelInterlinear" class="switch-label"></span>
+          </label>
+
+          <!-- separator enable switch -->
+          <label class="switch">
+            <input id="sepEnable" type="checkbox" />
+            <span class="slider" aria-hidden="true"></span>
+            <span id="labelSep" class="switch-label"></span>
+          </label>
+
+          <!-- separator controls (hidden when sep disabled) -->
+          <div id="sepControls" class="sep-controls hidden">
+            <label class="control">
+              <input id="separator" class="sep-input" type="text" maxlength="1" list="sepOptions" />
+              <datalist id="sepOptions">
+                <option value="" label=""></option>
+                <option value=" " label="スペース"></option>
+                <option value="-" label="ハイフン"></option>
+                <option value="·" label="中黒"></option>
+                <option value="." label="ピリオド"></option>
+                <option value="/" label="スラッシュ"></option>
+              </datalist>
+              <span class="sep-preview" id="sepPreview" aria-hidden="true">∅</span>
+            </label>
+            <div class="chips" id="sepChips" role="group" aria-label="separator options">
+              <button class="chip" data-sep="">∅</button>
+              <button class="chip" data-sep=" ">␣</button>
+              <button class="chip" data-sep="·">·</button>
+              <button class="chip" data-sep="-">-</button>
+              <button class="chip" data-sep=".">.</button>
+              <button class="chip" data-sep="/">/</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="copyBtn" class="btn"></button>
+          <span id="status" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <label for="output" id="labelOutput" class="label"></label>
+        <textarea id="output" class="textarea" rows="6" readonly></textarea>
+      </section>
+
+      <section id="interlinearPanel" class="panel hidden" aria-hidden="true">
+        <div id="ttlInterlinear" class="panel-title"></div>
+        <div id="interlinear" class="interlinear"></div>
+        <p id="hintInterlinear" class="hint"></p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <small>
+        Hangul → Yale Romanizer.
+        © 2025–present. Seo Mincheol.
+      </small>
+    </footer>
+    
+    <!-- 예일식 참조 드로어 -->
+    <aside id="refDrawer" class="drawer" aria-hidden="true">
+      <div class="drawer-head">
+        <div id="ttlRef" class="drawer-title"></div>
+        <button id="closeRef" class="btn btn-ghost"></button>
+      </div>
+      <div id="refBody" class="drawer-body">
+        <!-- JS가 매핑 테이블을 렌더링 -->
+      </div>
+    </aside>
+
+    <!-- 히스토리 드로어 -->
+    <aside id="historyDrawer" class="drawer" aria-hidden="true">
+      <div class="drawer-head">
+        <div id="ttlHist" class="drawer-title"></div>
+        <div class="drawer-tools">
+          <button id="clearHist" class="btn btn-ghost"></button>
+          <button id="closeHist" class="btn btn-ghost"></button>
+        </div>
+      </div>
+      <div id="histList" class="drawer-body history-list">
+        <!-- JS가 이력 렌더링 -->
+      </div>
+    </aside>
+
+    <script src="app.js"></script>
+    <div id="backdrop" class="backdrop" hidden></div>
+  </body>
+</html>
