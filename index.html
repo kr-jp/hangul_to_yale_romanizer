@@ -4,14 +4,18 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hangul → Yale Romanizer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css" />
     <link rel="icon" href="assets/logo/favicon.png">
   </head>
   <body>
     <header class="header">
-      <h1>한글 → Yale Romanizer</h1>
-      <p class="sub">退屈なことは機械にやらせよう</p>
+      <h1 id="appTitle">한글 ↔ Yale Romanizer</h1>
+      <p class="sub" id="appSub">退屈なことは機械にやらせよう</p>
+      <div class="direction-toggle" id="directionToggle" role="radiogroup" aria-label="Conversion direction">
+        <button class="dir-btn active" data-dir="h2y" role="radio" aria-checked="true">한글 → Yale</button>
+        <button class="dir-btn" data-dir="y2h" role="radio" aria-checked="false">Yale → 한글</button>
+      </div>
       <div class="header-actions">
         <button id="openHist" class="btn btn-ghost" aria-controls="historyDrawer" aria-expanded="false"></button>
         <button id="openRef" class="btn btn-ghost" aria-controls="refDrawer" aria-expanded="false"></button>
@@ -22,9 +26,18 @@
     </header>
 
     <main class="container">
-      <section class="panel">
-        <label for="input" id="labelInput" class="label">入力（ハングル）</label>
-        <textarea id="input" class="textarea" placeholder="입력 대기 중" rows="4"></textarea>
+      <section class="panel panel-main">
+        <div class="textarea-row">
+          <div class="textarea-col">
+            <label for="input" id="labelInput" class="label">入力（ハングル）</label>
+            <textarea id="input" class="textarea" placeholder="입력 대기 중" rows="5"></textarea>
+            <p id="hintY2H" class="hint hidden"></p>
+          </div>
+          <div class="textarea-col">
+            <label for="output" id="labelOutput" class="label"></label>
+            <textarea id="output" class="textarea" rows="5" readonly></textarea>
+          </div>
+        </div>
 
         <div class="controls">
           <label class="switch">
@@ -33,21 +46,21 @@
             <span id="labelLabial" class="switch-label"></span>
           </label>
 
-          <!-- interlinear first -->
+          <!-- 인터리니어 스위치 -->
           <label class="switch">
             <input id="interlinearMode" type="checkbox" checked />
             <span class="slider" aria-hidden="true"></span>
             <span id="labelInterlinear" class="switch-label"></span>
           </label>
 
-          <!-- separator enable switch -->
+          <!-- 구분자 활성화 스위치 -->
           <label class="switch">
             <input id="sepEnable" type="checkbox" />
             <span class="slider" aria-hidden="true"></span>
             <span id="labelSep" class="switch-label"></span>
           </label>
 
-          <!-- separator controls (hidden when sep disabled) -->
+          <!-- 구분자 설정 (비활성 시 숨김) -->
           <div id="sepControls" class="sep-controls hidden">
             <label class="control">
               <input id="separator" class="sep-input" type="text" maxlength="1" list="sepOptions" />
@@ -78,11 +91,6 @@
         </div>
       </section>
 
-      <section class="panel">
-        <label for="output" id="labelOutput" class="label"></label>
-        <textarea id="output" class="textarea" rows="6" readonly></textarea>
-      </section>
-
       <section id="interlinearPanel" class="panel hidden" aria-hidden="true">
         <div id="ttlInterlinear" class="panel-title"></div>
         <div id="interlinear" class="interlinear"></div>
@@ -91,10 +99,7 @@
     </main>
 
     <footer class="footer">
-      <small>
-        Hangul → Yale Romanizer.
-        © 2025–present. Seo Mincheol.
-      </small>
+      <small>© 2026 <a href="https://researchmap.jp/jp-kr" target="_blank" rel="noopener">Seo Mincheol</a>. All rights reserved.</small>
     </footer>
     
     <!-- 예일식 참조 드로어 -->
@@ -122,6 +127,7 @@
       </div>
     </aside>
 
+    <div id="toast" class="toast" aria-live="polite"></div>
     <script src="app.js"></script>
     <div id="backdrop" class="backdrop" hidden></div>
   </body>
