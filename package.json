@@ -1,0 +1,12 @@
+{
+  "name": "hangul-yale-romanizer",
+  "version": "1.0.0",
+  "description": "Hangul ↔ Yale Romanization tool for linguistic research",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev": "python3 -m http.server 8080"
+  },
+  "license": "MIT"
+}

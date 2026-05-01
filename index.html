@@ -4,14 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Hangul → Yale Romanizer</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&family=Noto+Sans+KR:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css" />
     <link rel="icon" href="assets/logo/favicon.png">
   </head>
   <body>
     <header class="header">
-      <h1 id="appTitle">한글 ↔ Yale Romanizer</h1>
-      <p class="sub" id="appSub">退屈なことは機械にやらせよう</p>
+      <h1 id="appTitle">한글 ↔ Yale</h1>
+      <p class="sub" id="appSub">Yale romanization for Korean linguistics</p>
       <div class="direction-toggle" id="directionToggle" role="radiogroup" aria-label="Conversion direction">
         <button class="dir-btn active" data-dir="h2y" role="radio" aria-checked="true">한글 → Yale</button>
         <button class="dir-btn" data-dir="y2h" role="radio" aria-checked="false">Yale → 한글</button>
@@ -19,8 +21,8 @@
       <div class="header-actions">
         <button id="openHist" class="btn btn-ghost" aria-controls="historyDrawer" aria-expanded="false"></button>
         <button id="openRef" class="btn btn-ghost" aria-controls="refDrawer" aria-expanded="false"></button>
-        <button id="themeToggle" class="btn btn-ghost" aria-pressed="false" title="テーマ切替">🌓</button>
-        <button id="langToggle" class="btn btn-ghost" aria-pressed="false" title="言語切替"></button>
+        <button id="themeToggle" class="btn btn-ghost" aria-pressed="false" aria-label="Toggle theme"></button>
+        <button id="langToggle" class="btn btn-ghost" aria-pressed="false" aria-label="Toggle language"></button>
         <a class="btn btn-link" href="https://github.com/kr-jp/hangul_to_yale_romanizer" target="_blank" rel="noopener">Usage</a>
       </div>
     </header>
@@ -51,6 +53,13 @@
             <input id="interlinearMode" type="checkbox" checked />
             <span class="slider" aria-hidden="true"></span>
             <span id="labelInterlinear" class="switch-label"></span>
+          </label>
+
+          <!-- 예문 번호 매기기 스위치 -->
+          <label class="switch">
+            <input id="exampleNumbering" type="checkbox" />
+            <span class="slider" aria-hidden="true"></span>
+            <span id="labelExampleNum" class="switch-label"></span>
           </label>
 
           <!-- 구분자 활성화 스위치 -->
@@ -87,6 +96,15 @@
 
         <div class="actions">
           <button id="copyBtn" class="btn"></button>
+          <div class="format-group">
+            <span id="labelFormat" class="format-label"></span>
+            <div class="chips" id="formatChips" role="group" aria-label="output format">
+              <button class="chip active" data-format="plain" type="button">Plain</button>
+              <button class="chip" data-format="gloss" type="button">Gloss</button>
+              <button class="chip" data-format="latex" type="button">LaTeX</button>
+              <button class="chip" data-format="markdown" type="button">Markdown</button>
+            </div>
+          </div>
           <span id="status" class="status" aria-live="polite"></span>
         </div>
       </section>
@@ -128,7 +146,7 @@
     </aside>
 
     <div id="toast" class="toast" aria-live="polite"></div>
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
     <div id="backdrop" class="backdrop" hidden></div>
   </body>
 </html>

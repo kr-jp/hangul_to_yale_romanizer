@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>시안 A — 학술 저널 스타일 / Hangul ↔ Yale Romanizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&family=Noto+Serif+KR:wght@400;600;700&family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#fbfaf6;
+    --ink:#1a1a1a;
+    --rule:#cdc7bc;
+    --rule-strong:#5a564d;
+    --muted:#6b6557;
+    --accent:#5a1a3a;        /* 진한 자주, 학술지의 reference 컬러 */
+    --serif:'Source Serif 4','Noto Serif JP','Noto Serif KR',Georgia,serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;padding:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--serif);
+    font-size:16px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* 캡션·라벨은 산세리프가 아닌 작은 캡스 세리프 */
+  .meta{font-family:var(--serif);font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);font-weight:600}
+
+  .page{
+    max-width:760px;
+    margin:0 auto;
+    padding:48px 32px 64px;
+  }
+
+  /* ===== 헤더 ===== */
+  .masthead{border-bottom:2px solid var(--ink);padding-bottom:18px;margin-bottom:32px}
+  .masthead .row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .masthead .vol{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase}
+  .masthead h1{
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:40px;
+    margin:14px 0 4px;
+    letter-spacing:-0.01em;
+  }
+  .masthead .sub{font-style:italic;color:var(--muted);font-size:15px;margin:0}
+  .masthead nav{margin-top:18px;display:flex;gap:24px;font-size:13px;flex-wrap:wrap}
+  .masthead nav a{color:var(--ink);text-decoration:none;border-bottom:1px solid transparent}
+  .masthead nav a.active{border-bottom:1px solid var(--ink);font-weight:600}
+  .masthead nav a:hover{border-bottom-color:var(--accent);color:var(--accent)}
+
+  /* ===== 섹션 ===== */
+  section{margin-bottom:36px}
+  h2.section-title{
+    font-size:13px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;
+    border-bottom:1px solid var(--rule);
+    padding-bottom:6px;margin:0 0 16px;
+  }
+
+  /* ===== 입출력 ===== */
+  .io{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .io .col label{display:block;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;font-weight:600}
+  .io textarea, .io .display{
+    width:100%;
+    border:none;
+    border-top:1px solid var(--rule-strong);
+    border-bottom:1px solid var(--rule-strong);
+    background:transparent;
+    color:var(--ink);
+    padding:14px 4px;
+    font-family:var(--serif);
+    font-size:18px;
+    line-height:1.5;
+    resize:vertical;
+    outline:none;
+    min-height:108px;
+  }
+  .io .display{font-family:var(--mono);font-size:15px;white-space:pre-wrap}
+  .io textarea:focus{border-color:var(--accent)}
+
+  /* ===== 옵션 (학술지의 footnote 스타일) ===== */
+  .options{display:grid;grid-template-columns:1fr 1fr;gap:8px 32px;font-size:14px}
+  .opt{display:flex;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px dotted var(--rule)}
+  .opt .key{color:var(--muted);font-style:italic;flex:1}
+  .opt .val{font-weight:600}
+  .opt .val.on{color:var(--accent)}
+  .opt .val.off{color:var(--muted)}
+
+  /* ===== 형식 선택 ===== */
+  .formats{display:flex;align-items:center;gap:18px;font-size:14px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:10px 0}
+  .formats .label{color:var(--muted);font-style:italic;font-size:13px}
+  .formats .opt-row{display:flex;gap:18px;flex-wrap:wrap}
+  .formats button{background:none;border:none;font-family:var(--serif);font-size:14px;color:var(--muted);cursor:pointer;padding:0;letter-spacing:0.02em}
+  .formats button.active{color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:4px}
+
+  /* ===== 액션 ===== */
+  .actions{display:flex;gap:18px;align-items:center;margin-top:18px}
+  .btn-text{background:none;border:none;color:var(--accent);font-family:var(--serif);font-size:15px;font-weight:600;cursor:pointer;padding:0;border-bottom:1px solid var(--accent)}
+  .btn-text:hover{color:var(--ink);border-bottom-color:var(--ink)}
+
+  /* ===== 인터리니어 (학술지의 example block) ===== */
+  .examples{background:transparent;padding:0}
+  .ex-block{margin:18px 0;display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:baseline}
+  .ex-num{font-family:var(--mono);color:var(--muted);font-size:13px;padding-top:2px}
+  .ex-content{display:grid;gap:4px}
+  .ex-line{font-family:var(--mono);font-size:14px;line-height:1.55}
+  .ex-line.top{color:var(--ink)}
+  .ex-line.bot{color:var(--muted)}
+  .ex-trans{font-style:italic;color:var(--muted);font-size:14px;margin-top:4px}
+
+  /* ===== 푸터 ===== */
+  .colophon{
+    margin-top:64px;padding-top:18px;border-top:2px solid var(--ink);
+    font-size:12px;color:var(--muted);font-style:italic;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px
+  }
+
+  @media (max-width:640px){
+    .io{grid-template-columns:1fr}
+    .options{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+
+    <header class="masthead">
+      <div class="row">
+        <span class="vol">Vol. 1 · Yale Romanization Tool</span>
+        <span class="meta">Linguistic Utility</span>
+      </div>
+      <h1>한글 ↔ Yale Romanizer</h1>
+      <p class="sub">A bidirectional transcription tool for Korean linguistic notation.</p>
+      <nav>
+        <a href="#" class="active">Hangul → Yale</a>
+        <a href="#">Yale → Hangul</a>
+        <span style="flex:1"></span>
+        <a href="#">References</a>
+        <a href="#">History</a>
+        <a href="#">Usage</a>
+      </nav>
+    </header>
+
+    <section>
+      <h2 class="section-title">Input · Output</h2>
+      <div class="io">
+        <div class="col">
+          <label>Source (Hangul)</label>
+          <textarea>한국어를 공부 한다
+안녕하세요</textarea>
+        </div>
+        <div class="col">
+          <label>Transcription (Yale)</label>
+          <div class="display">hankwukelul kongpu hanta
+annyenghaseyyo</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Options</h2>
+      <div class="options">
+        <div class="opt"><span class="key">Bilabial rule (ㅁㅂㅃㅍ + ㅜ → u)</span><span class="val on">on</span></div>
+        <div class="opt"><span class="key">Interlinear display</span><span class="val on">on</span></div>
+        <div class="opt"><span class="key">Example numbering</span><span class="val off">off</span></div>
+        <div class="opt"><span class="key">Jamo separator</span><span class="val off">∅</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Output Format</h2>
+      <div class="formats">
+        <span class="label">Format —</span>
+        <div class="opt-row">
+          <button class="active">Plain</button>
+          <button>Gloss (TSV)</button>
+          <button>LaTeX (gb4e)</button>
+          <button>Markdown</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-text">Copy Result →</button>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-title">Examples</h2>
+      <div class="examples">
+        <div class="ex-block">
+          <span class="ex-num">(1)</span>
+          <div class="ex-content">
+            <div class="ex-line top">한국어를  공부  한다</div>
+            <div class="ex-line bot">hankwuk-elul  kongpwu  hanta</div>
+            <div class="ex-trans">'(I) study Korean.'</div>
+          </div>
+        </div>
+        <div class="ex-block">
+          <span class="ex-num">(2)</span>
+          <div class="ex-content">
+            <div class="ex-line top">안녕하세요</div>
+            <div class="ex-line bot">annyenghaseyyo</div>
+            <div class="ex-trans">'Hello.'</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="colophon">
+      <span>© 2026 Seo Mincheol · researchmap.jp/jp-kr</span>
+      <span>Yale Romanization · Cf. Martin (1992)</span>
+    </footer>
+
+  </main>
+</body>
+</html>
