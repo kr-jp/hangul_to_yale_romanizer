@@ -96,6 +96,10 @@
 
         <div class="actions">
           <button id="copyBtn" class="btn"></button>
+          <button id="downloadBtn" class="btn btn-outline" type="button" aria-label="Download result">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M12 3v12M6 11l6 6 6-6M5 21h14"/></svg>
+            <span id="labelDownload"></span>
+          </button>
           <div class="format-group">
             <span id="labelFormat" class="format-label"></span>
             <div class="chips" id="formatChips" role="group" aria-label="output format">
@@ -105,6 +109,10 @@
               <button class="chip" data-format="markdown" type="button">Markdown</button>
             </div>
           </div>
+          <button id="shareBtn" class="btn btn-outline" type="button" style="margin-left:auto" aria-label="Share URL">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+            <span id="labelShare"></span>
+          </button>
           <span id="status" class="status" aria-live="polite"></span>
         </div>
       </section>

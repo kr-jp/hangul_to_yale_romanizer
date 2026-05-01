@@ -58,6 +58,10 @@ const $formatChips = document.getElementById('formatChips');
 const $labelFormat = document.getElementById('labelFormat');
 const $exampleNumbering = document.getElementById('exampleNumbering');
 const $labelExampleNum = document.getElementById('labelExampleNum');
+const $downloadBtn = document.getElementById('downloadBtn');
+const $labelDownload = document.getElementById('labelDownload');
+const $shareBtn = document.getElementById('shareBtn');
+const $labelShare = document.getElementById('labelShare');
 
 let COPIED_TEXT = 'Copied!';
 
@@ -353,6 +357,8 @@ function closeDrawer($el, $btn) {
 // ===== 방향 전환 =====
 function applyDirection(dir) {
   setDirection(dir);
+  // Yale → 한글 모드 진입 시점에 빈도 데이터를 lazy load
+  if (dir === 'y2h') loadFrequencyData();
   const T = I18N[state.currentLang] || I18N.ja;
   $dirToggle.querySelectorAll('.dir-btn').forEach(b => {
     const isActive = b.dataset.dir === dir;
@@ -426,12 +432,158 @@ function applyLang(lang) {
   if ($langToggle) $langToggle.textContent = T.langToggle;
   if ($labelFormat) $labelFormat.textContent = T.labelFormat || '';
   if ($labelExampleNum) $labelExampleNum.textContent = T.labelExampleNum || '';
+  if ($labelDownload) $labelDownload.textContent = T.labelDownload || '';
+  if ($labelShare) $labelShare.textContent = T.labelShare || '';
   COPIED_TEXT = T.copied;
 }
 
-// ===== 빈도 데이터 로드 =====
+// ===== 파일 업로드 (드래그 앤 드롭) =====
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+function setupFileDrop() {
+  if (!$in) return;
+  ['dragenter', 'dragover'].forEach(ev => {
+    $in.addEventListener(ev, (e) => {
+      if (!e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      $in.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(ev => {
+    $in.addEventListener(ev, (e) => {
+      e.preventDefault();
+      $in.classList.remove('dragover');
+    });
+  });
+  $in.addEventListener('drop', (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    const T = I18N[state.currentLang] || I18N.ja;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      showToast(T.fileTooLarge);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      $in.value = String(reader.result || '');
+      updateAll();
+    };
+    reader.onerror = () => showToast('Read error');
+    reader.readAsText(file);
+  });
+}
+
+// ===== 결과 다운로드 =====
+const FORMAT_FILE_INFO = {
+  plain:    { ext: 'txt', mime: 'text/plain' },
+  gloss:    { ext: 'tsv', mime: 'text/tab-separated-values' },
+  latex:    { ext: 'tex', mime: 'application/x-tex' },
+  markdown: { ext: 'md',  mime: 'text/markdown' },
+};
+
+function downloadResult() {
+  const text = $out.value || '';
+  const T = I18N[state.currentLang] || I18N.ja;
+  if (!text) { showToast(T.noContent); return; }
+  const info = FORMAT_FILE_INFO[state.currentFormat] || FORMAT_FILE_INFO.plain;
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `yale-${state.conversionDir}-${stamp}.${info.ext}`;
+  const blob = new Blob([text], { type: `${info.mime};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ===== URL 공유 (입력+옵션 → URL-safe base64) =====
+function b64UrlEncode(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64UrlDecode(s) {
+  let std = s.replace(/-/g, '+').replace(/_/g, '/');
+  while (std.length % 4) std += '=';
+  const bin = atob(std);
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function captureShareState() {
+  const opts = getOpts();
+  return {
+    d: state.conversionDir,
+    i: $in.value || '',
+    l: opts.labial,
+    s: opts.sep,
+    se: !!$sepEnable?.checked,
+    il: !!$interlinearMode?.checked,
+    f: state.currentFormat,
+    n: !!$exampleNumbering?.checked,
+  };
+}
+
+function applyShareState(s) {
+  // 방향 먼저 (applyDirection이 input을 비우므로 input보다 먼저)
+  if (s.d === 'y2h' && state.conversionDir !== 'y2h') applyDirection('y2h');
+  else if (s.d === 'h2y' && state.conversionDir !== 'h2y') applyDirection('h2y');
+  if ($lab) $lab.checked = !!s.l;
+  if ($sep) $sep.value = s.s || '';
+  if ($sepEnable) $sepEnable.checked = !!s.se;
+  if ($interlinearMode) $interlinearMode.checked = !!s.il;
+  if ($exampleNumbering) $exampleNumbering.checked = !!s.n;
+  if (s.f) setFormat(s.f);
+  $in.value = s.i || '';
+  updateAll();
+}
+
+function buildShareUrl() {
+  const json = JSON.stringify(captureShareState());
+  return location.origin + location.pathname + '?s=' + b64UrlEncode(json);
+}
+
+async function shareUrl() {
+  const url = buildShareUrl();
+  const T = I18N[state.currentLang] || I18N.ja;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(T.shareCopied);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+    showToast(T.shareCopied);
+  }
+}
+
+function loadFromUrl() {
+  const params = new URLSearchParams(location.search);
+  const s = params.get('s');
+  if (!s) return false;
+  try {
+    const decoded = JSON.parse(b64UrlDecode(s));
+    applyShareState(decoded);
+    return true;
+  } catch (err) {
+    console.warn('[Yale] URL 공유 데이터 파싱 실패:', err);
+    return false;
+  }
+}
+
+// ===== 빈도 데이터 lazy load =====
+// y2h 모드 진입 시점에만 fetch. 한 번 받으면 Promise를 캐시해 재호출에서 재사용.
+// h2y만 쓰는 사용자는 478KB 데이터를 다운로드하지 않음.
+let _freqLoadPromise = null;
+
 function loadFrequencyData() {
-  fetch('data/syllable-freq.json')
+  if (_freqLoadPromise) return _freqLoadPromise;
+  _freqLoadPromise = fetch('data/syllable-freq.json')
     .then(r => r.json())
     .then(data => {
       setFrequencyData({ syllable: data.u || null, bigram: data.b || null, word: data.w || null });
@@ -439,7 +591,9 @@ function loadFrequencyData() {
     })
     .catch((err) => {
       console.warn('[Yale] 빈도 데이터 로딩 실패, 기본 파서 사용:', err);
+      _freqLoadPromise = null; // 실패 시 다음 시도 가능하게
     });
+  return _freqLoadPromise;
 }
 
 // ===== 이벤트 바인딩 + 진입 =====
@@ -567,10 +721,20 @@ export function init() {
     applyLang(state.currentLang === 'ja' ? 'ko' : 'ja');
   });
 
+  // 다운로드 / URL 공유
+  $downloadBtn?.addEventListener('click', downloadResult);
+  $shareBtn?.addEventListener('click', shareUrl);
+
+  // 파일 드래그 앤 드롭
+  setupFileDrop();
+
   // 초기 적용
   applyTheme(state.currentTheme);
   applyLang(state.currentLang);
-  $in.value = '';
-  loadFrequencyData();
-  updateAll();
+  // URL에 공유 데이터가 있으면 그것을 우선 (y2h가 들어 있으면 applyDirection 경유로 빈도 데이터 lazy load)
+  const restoredFromUrl = loadFromUrl();
+  if (!restoredFromUrl) {
+    $in.value = '';
+    updateAll();
+  }
 }

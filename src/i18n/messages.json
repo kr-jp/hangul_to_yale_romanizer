@@ -24,10 +24,14 @@
     "labelOutputY2H": "変換結果（ハングル）",
     "placeholderH2Y": "입력 대기 중",
     "placeholderY2H": "입력 대기 중",
-    "hintY2H": "💡 例文にある「.」や「-」をそのまま入力しても問題ありません（例: al-keyss-ta）。",
-    "appSub": "退屈なことは機械にやらせよう",
+    "hintY2H": "「.」や「-」をそのまま入力しても問題ありません（例: al-keyss-ta）。",
     "labelFormat": "出力形式",
-    "labelExampleNum": "例文番号"
+    "labelExampleNum": "例文番号",
+    "labelDownload": "ダウンロード",
+    "labelShare": "URL共有",
+    "shareCopied": "共有URLをコピーしました!",
+    "fileTooLarge": "ファイルが大きすぎます (5MB制限)",
+    "noContent": "ダウンロードする内容がありません"
   },
   "ko": {
     "openHist": "변환 기록",
@@ -54,9 +58,13 @@
     "labelOutputY2H": "변환 결과(한글)",
     "placeholderH2Y": "입력 대기 중",
     "placeholderY2H": "입력 대기 중",
-    "hintY2H": "💡 예문에 있는 \".\"이나 \"-\"를 그대로 입력해도 문제 없습니다 (예: al-keyss-ta).",
-    "appSub": "지루한 건 기계에게 맡기자",
+    "hintY2H": "예문에 있는 \".\"이나 \"-\"를 그대로 입력해도 문제 없습니다 (예: al-keyss-ta).",
     "labelFormat": "출력 형식",
-    "labelExampleNum": "예문 번호"
+    "labelExampleNum": "예문 번호",
+    "labelDownload": "다운로드",
+    "labelShare": "URL 공유",
+    "shareCopied": "공유 URL이 복사되었습니다!",
+    "fileTooLarge": "파일이 너무 큽니다 (5MB 제한)",
+    "noContent": "다운로드할 내용이 없습니다"
   }
 }

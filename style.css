@@ -216,6 +216,11 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+.textarea.dragover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 .textarea-col .textarea[readonly] {
   background: var(--surface-2);
   font-family: var(--mono);
