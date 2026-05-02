@@ -865,10 +865,12 @@ export function init() {
   $histList?.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
+    // renderHistory()로 타겟 detach되면 document 외부클릭 핸들러가 드로어를 닫는다 — 차단
+    e.stopPropagation();
     const id = Number(btn.dataset.id);
     const act = btn.dataset.act;
 
-    // 태그 추가/제거
+    // 태그 추가/제거 (드로어 유지)
     if (act === 'addtag') {
       const T = I18N[state.currentLang] || I18N.ja;
       const tag = window.prompt(T.addTagPrompt || 'Add tag');
@@ -894,6 +896,7 @@ export function init() {
       $sep.value = h.opts.sep || '';
       $lab.checked = !!h.opts.labial;
       updateAll();
+      closeDrawer($histDrawer, $openHist);
     } else if (act === 'pin') {
       hist[idx].pinned = !hist[idx].pinned;
       saveHistory(hist);

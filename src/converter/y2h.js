@@ -144,15 +144,25 @@ export function parseYaleWord(word, { labial = true } = {}) {
 
 // 한 word의 top-K 한글 후보를 반환. 모호성 없는 단어는 후보 1개.
 // .나 -로 음절 경계가 명시되어 있거나 빈도 데이터가 없으면 best 1개만.
+// word에 비-Yale 문자(?, ,, ! 등)가 섞여 있으면 Yale 코어만 추출 후 prefix/suffix 보존
 export function parseYaleWordCandidates(word, { labial = true } = {}, k = 5) {
   if (!word) return [];
-  const w = word.toLowerCase();
+  const m = word.match(/[a-zA-Z.\-]+/);
+  if (!m) return [];
+  const core = m[0];
+  const prefix = word.slice(0, m.index);
+  const suffix = word.slice(m.index + core.length);
+  const w = core.toLowerCase();
+  let candidates;
   if (/[.\-]/.test(w) || !syllableFreq || !bigramFreq) {
     const best = parseYaleWord(w, { labial });
-    return best ? [{ hangul: best, score: 0 }] : [];
+    candidates = best ? [{ hangul: best, score: 0 }] : [];
+  } else {
+    const all = disambiguateSegment(w, labial, true);
+    candidates = Array.isArray(all) ? all.slice(0, k) : [];
   }
-  const all = disambiguateSegment(w, labial, true);
-  return Array.isArray(all) ? all.slice(0, k) : [];
+  if (!prefix && !suffix) return candidates;
+  return candidates.map(c => ({ ...c, hangul: prefix + c.hangul + suffix }));
 }
 
 // ===== 스마트 파서: 그래프 + 빔서치 DP =====

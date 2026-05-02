@@ -22,7 +22,7 @@ export const state = {
   conversionDir: 'h2y',
   currentLang: readSaved(KEYS.lang, VALID_LANGS, 'ja'),
   currentFormat: readSaved(KEYS.format, VALID_FORMATS, 'plain'),
-  currentTheme: readSaved(KEYS.theme, VALID_THEMES, 'dark'),
+  currentTheme: readSaved(KEYS.theme, VALID_THEMES, 'light'),
 };
 
 export function setDirection(dir) {

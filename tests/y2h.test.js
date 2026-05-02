@@ -122,6 +122,21 @@ describe('실제 빈도 데이터 주입 — 빔서치 DP 경로', () => {
     assert.equal(cands[0].hangul, '한국');
   });
 
+  test('비-Yale 문자(?, !) 섞여도 코어만 변환하고 prefix/suffix 보존', () => {
+    const cands = parseYaleWordCandidates('khemishaytulilkkayo?');
+    assert.ok(cands.length > 0, '후보 1개 이상 기대');
+    assert.ok(cands[0].hangul.endsWith('?'), `suffix '?' 보존 기대: ${cands[0].hangul}`);
+    // 빔서치가 통째 ?까지 처리하지 않아야 함
+    assert.equal(cands[0].hangul, '커밋해드릴까요?');
+  });
+
+  test('reverseConvert와 parseYaleWordCandidates의 best가 일치 (단어+구두점)', () => {
+    const word = 'khemishaytulilkkayo?';
+    const rev = reverseConvert(word);
+    const best = parseYaleWordCandidates(word)[0]?.hangul;
+    assert.equal(best, rev, `불일치: parseYaleWordCandidates=${best} vs reverseConvert=${rev}`);
+  });
+
   test('reverseConvert — 빈도 데이터 활용 (cenel은 모호성, best 한 개로 결정)', () => {
     const result = reverseConvert('cenel');
     // best가 후보 목록의 첫 번째와 일치해야 함
