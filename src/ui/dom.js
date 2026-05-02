@@ -1,6 +1,6 @@
 // DOM 참조, 이벤트 바인딩, 렌더링. 변환/포맷/상태 모듈을 조합해 UI를 구성한다
 import { convert } from '../converter/h2y.js';
-import { reverseConvert, setFrequencyData } from '../converter/y2h.js';
+import { reverseConvert, setFrequencyData, parseYaleWordCandidates } from '../converter/y2h.js';
 import { CHOSEONG, JUNGSEONG, JONGSEONG, J2Y, DOUBLE_CODA_SPLIT } from '../converter/hangul.js';
 import {
   formatPlain, formatLeipzigTSV, formatLatex, formatMarkdown, formatSingleExample,
@@ -86,15 +86,33 @@ function splitLines(text) {
   return (text || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
 }
 
-// 토큰 단위 변환 결과를 [{tokens, romas}, ...]로 직조 (Plain 외 형식의 입력)
+// y2h 모드에서 사용자가 popover로 고른 word 교체. 키는 입력 yale word 문자열.
+// 같은 word가 입력에 다시 나오면 자동 적용. 페이지 reload 시 사라짐 (sessionStorage 미사용)
+const wordOverrides = new Map();
+
+// 후보 목록과 사용자 override를 비교해 표시할 hangul 결정
+function pickPreferred(yaleWord, candidates) {
+  const override = wordOverrides.get(yaleWord);
+  if (override && candidates.some(c => c.hangul === override)) return override;
+  return candidates[0]?.hangul || '';
+}
+
+// 토큰 단위 변환 결과를 [{tokens, romas}, ...]로 직조
+// y2h 모드: word별 후보 + override 적용. h2y 모드: 결정론적
 function buildExamples(text, opts) {
   const out = [];
   for (const line of splitLines(text)) {
     const tokens = line.split(/\s+/).filter(Boolean);
     if (!tokens.length) continue;
-    const romas = state.conversionDir === 'y2h'
-      ? tokens.map(t => reverseConvert(t, opts))
-      : tokens.map(t => convert(t, opts));
+    let romas;
+    if (state.conversionDir === 'y2h') {
+      romas = tokens.map(t => {
+        const cands = parseYaleWordCandidates(t, opts, 5);
+        return pickPreferred(t, cands);
+      });
+    } else {
+      romas = tokens.map(t => convert(t, opts));
+    }
     out.push({ tokens, romas });
   }
   return out;
@@ -104,6 +122,11 @@ function buildExamples(text, opts) {
 function buildFormattedOutput(text, opts, format) {
   if (!text || !text.trim()) return '';
   if (format === 'plain' || !format) {
+    // y2h 모드 + override 있으면 word 기반(buildExamples) 처리해 사용자 선택 반영,
+    // 그 외는 reverseConvert 통째 호출(줄바꿈/구두점 보존)
+    if (state.conversionDir === 'y2h' && wordOverrides.size > 0) {
+      return formatPlain(buildExamples(text, opts));
+    }
     return state.conversionDir === 'y2h'
       ? reverseConvert(text, opts)
       : convert(text, opts);
@@ -125,28 +148,121 @@ function updateSingle() {
 function renderInterlinear(lines, opts) {
   $interlinear.innerHTML = '';
   const frag = document.createDocumentFragment();
+  const isY2H = state.conversionDir === 'y2h';
+
   lines.forEach((line, idx) => {
     const block = document.createElement('div');
     block.className = 'inter-block';
     const tokens = line.split(/\s+/).filter(Boolean);
-    const romas = state.conversionDir === 'y2h'
-      ? tokens.map(t => reverseConvert(t, opts))
-      : tokens.map(t => convert(t, opts));
+
+    // y2h 모드: word별 top-K 후보 수집, 다후보 word는 클릭 가능
+    let candidatesByWord = null;
+    let romas;
+    if (isY2H) {
+      candidatesByWord = tokens.map(t => parseYaleWordCandidates(t, opts, 5));
+      // pickPreferred로 사용자 override 반영
+      romas = candidatesByWord.map((cs, i) => pickPreferred(tokens[i], cs));
+    } else {
+      romas = tokens.map(t => convert(t, opts));
+    }
+
     const top = document.createElement('div');
     top.className = 'line top mono';
     top.textContent = tokens.join(' ');
+
     const bottom = document.createElement('div');
     bottom.className = 'line bottom mono';
-    bottom.textContent = romas.join(' ');
-    block.appendChild(top); block.appendChild(bottom);
 
-    block.addEventListener('click', () => {
+    if (isY2H) {
+      romas.forEach((roma, i) => {
+        const span = document.createElement('span');
+        const ambiguous = (candidatesByWord[i]?.length || 0) > 1;
+        const edited = wordOverrides.has(tokens[i]);
+        let cls = 'inter-word';
+        if (ambiguous) cls += ' ambiguous';
+        if (edited && ambiguous) cls += ' edited';
+        span.className = cls;
+        span.dataset.idx = String(i);
+        span.textContent = roma;
+        bottom.appendChild(span);
+        if (i < romas.length - 1) bottom.appendChild(document.createTextNode(' '));
+      });
+    } else {
+      bottom.textContent = romas.join(' ');
+    }
+
+    block.appendChild(top);
+    block.appendChild(bottom);
+
+    block.addEventListener('click', (e) => {
+      // 다후보 word 클릭은 popover (카드 복사로 bubble되지 않게 stop)
+      const wordEl = e.target.closest('.inter-word.ambiguous');
+      if (wordEl && isY2H && candidatesByWord) {
+        e.stopPropagation();
+        const wIdx = Number(wordEl.dataset.idx);
+        const yaleWord = tokens[wIdx];
+        const currentSelected = wordOverrides.get(yaleWord) || candidatesByWord[wIdx][0]?.hangul;
+        showCandidatePopover(wordEl, candidatesByWord[wIdx], currentSelected, (selected) => {
+          wordOverrides.set(yaleWord, selected);
+          updateAll();   // 출력 textarea + 인터리니어 + 다운로드/공유 일괄 갱신
+        });
+        return;
+      }
+      // 그 외 클릭 = 현재 형식으로 카드 전체 복사
       const numbered = !!$exampleNumbering?.checked;
       copy(formatSingleExample(tokens, romas, state.currentFormat, { numbered, exampleIndex: idx }));
     });
     frag.appendChild(block);
   });
   $interlinear.appendChild(frag);
+}
+
+// ===== 후보 popover (모호성 있는 word 교체용) =====
+let _activePopover = null;
+let _popoverOutsideHandler = null;
+
+function showCandidatePopover(anchor, candidates, currentSelected, onSelect) {
+  hideCandidatePopover();
+  if (!candidates?.length) return;
+
+  const pop = document.createElement('div');
+  pop.className = 'candidate-popover';
+  candidates.forEach((c, i) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    let cls = 'candidate-item';
+    if (i === 0) cls += ' best';
+    if (c.hangul === currentSelected) cls += ' selected';
+    item.className = cls;
+    item.textContent = c.hangul;
+    item.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      onSelect(c.hangul);
+      hideCandidatePopover();
+    });
+    pop.appendChild(item);
+  });
+
+  document.body.appendChild(pop);
+  const rect = anchor.getBoundingClientRect();
+  pop.style.position = 'absolute';
+  pop.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+  pop.style.left = (rect.left + window.scrollX) + 'px';
+
+  _activePopover = pop;
+  _popoverOutsideHandler = (ev) => {
+    if (!pop.contains(ev.target)) hideCandidatePopover();
+  };
+  // 현재 클릭 이벤트가 끝난 다음 tick에 outside listener 등록
+  setTimeout(() => document.addEventListener('click', _popoverOutsideHandler), 0);
+}
+
+function hideCandidatePopover() {
+  if (_activePopover) { _activePopover.remove(); _activePopover = null; }
+  if (_popoverOutsideHandler) {
+    document.removeEventListener('click', _popoverOutsideHandler);
+    _popoverOutsideHandler = null;
+  }
 }
 
 function togglePanels(lines, opts) {
@@ -517,7 +633,7 @@ function b64UrlDecode(s) {
 
 function captureShareState() {
   const opts = getOpts();
-  return {
+  const out = {
     d: state.conversionDir,
     i: $in.value || '',
     l: opts.labial,
@@ -527,6 +643,9 @@ function captureShareState() {
     f: state.currentFormat,
     n: !!$exampleNumbering?.checked,
   };
+  // 사용자가 popover로 고른 word 교체 — 있을 때만 포함 (URL 길이 절약)
+  if (wordOverrides.size > 0) out.o = Object.fromEntries(wordOverrides);
+  return out;
 }
 
 function applyShareState(s) {
@@ -539,6 +658,11 @@ function applyShareState(s) {
   if ($interlinearMode) $interlinearMode.checked = !!s.il;
   if ($exampleNumbering) $exampleNumbering.checked = !!s.n;
   if (s.f) setFormat(s.f);
+  // word override 복원 (먼저 비우고 새로 채움)
+  wordOverrides.clear();
+  if (s.o && typeof s.o === 'object') {
+    for (const [k, v] of Object.entries(s.o)) wordOverrides.set(k, v);
+  }
   $in.value = s.i || '';
   updateAll();
 }

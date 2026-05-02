@@ -142,10 +142,24 @@ export function parseYaleWord(word, { labial = true } = {}) {
   return results.join('');
 }
 
+// 한 word의 top-K 한글 후보를 반환. 모호성 없는 단어는 후보 1개.
+// .나 -로 음절 경계가 명시되어 있거나 빈도 데이터가 없으면 best 1개만.
+export function parseYaleWordCandidates(word, { labial = true } = {}, k = 5) {
+  if (!word) return [];
+  const w = word.toLowerCase();
+  if (/[.\-]/.test(w) || !syllableFreq || !bigramFreq) {
+    const best = parseYaleWord(w, { labial });
+    return best ? [{ hangul: best, score: 0 }] : [];
+  }
+  const all = disambiguateSegment(w, labial, true);
+  return Array.isArray(all) ? all.slice(0, k) : [];
+}
+
 // ===== 스마트 파서: 그래프 + 빔서치 DP =====
-function disambiguateSegment(seg, labial) {
+// returnAll=true면 dp[n]의 top-K 후보를 모두 backtrack해 [{hangul, score}, ...] 반환
+function disambiguateSegment(seg, labial, returnAll = false) {
   const n = seg.length;
-  if (n === 0) return '';
+  if (n === 0) return returnAll ? [] : '';
 
   const edges = Array.from({ length: n }, () => []);
 
@@ -236,15 +250,35 @@ function disambiguateSegment(seg, labial) {
     }
   }
 
-  if (!dp[n].length) return parseYaleWordGreedy(seg, { labial });
-
-  let bestIdx = 0;
-  for (let ci = 1; ci < dp[n].length; ci++) {
-    if (dp[n][ci].score > dp[n][bestIdx].score) bestIdx = ci;
+  if (!dp[n].length) {
+    const fallback = parseYaleWordGreedy(seg, { labial });
+    return returnAll ? (fallback ? [{ hangul: fallback, score: 0 }] : []) : fallback;
   }
 
+  // dp[n]을 점수 내림차순 인덱스로 정렬
+  const sortedIdx = dp[n].map((_, i) => i)
+    .sort((a, b) => dp[n][b].score - dp[n][a].score);
+
+  if (!returnAll) {
+    return backtrackFrom(dp, n, sortedIdx[0]);
+  }
+
+  // top-K 후보를 모두 backtrack, 동일 결과는 한 번만
+  const seen = new Set();
+  const candidates = [];
+  for (const idx of sortedIdx) {
+    const hangul = backtrackFrom(dp, n, idx);
+    if (!seen.has(hangul)) {
+      seen.add(hangul);
+      candidates.push({ hangul, score: dp[n][idx].score });
+    }
+  }
+  return candidates;
+}
+
+function backtrackFrom(dp, n, startIdx) {
   const result = [];
-  let pos = n, idx = bestIdx;
+  let pos = n, idx = startIdx;
   while (pos > 0 && dp[pos][idx]) {
     result.unshift(dp[pos][idx].hangul);
     const c = dp[pos][idx];

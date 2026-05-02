@@ -433,6 +433,75 @@ body {
 .inter-block .line.top { color: var(--text); }
 .inter-block .line.bottom { color: var(--muted); margin-top: 4px; }
 
+/* y2h 모드의 후보 교체 가능 word */
+.inter-word { display: inline-block; }
+.inter-word.ambiguous {
+  border-bottom: 1px dotted var(--accent);
+  cursor: pointer;
+  padding: 0 1px;
+  border-radius: 2px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.inter-word.ambiguous:hover {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+/* 사용자가 popover로 후보를 교체한 word — 점선 대신 실선 */
+.inter-word.ambiguous.edited {
+  border-bottom: 1px solid var(--accent);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+/* 후보 popover */
+.candidate-popover {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  min-width: 140px;
+  max-height: 280px;
+  overflow: auto;
+  z-index: 100;
+}
+.candidate-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text);
+}
+.candidate-item:hover { background: var(--surface-2); }
+.candidate-item.best::after {
+  content: '★';
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 11px;
+}
+/* 현재 사용자 선택 (override) */
+.candidate-item.selected {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.candidate-item.selected::before {
+  content: '✓';
+  color: var(--accent);
+  font-size: 12px;
+  margin-right: 4px;
+}
+/* best와 selected 동시일 때 ★는 숨김 (✓만) */
+.candidate-item.best.selected::after { content: none; }
+
 /* ===== 푸터 ===== */
 .footer {
   text-align: center;

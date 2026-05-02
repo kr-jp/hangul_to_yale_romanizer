@@ -2,7 +2,7 @@
 // 빈도 데이터를 주입하지 않으면 탐욕 파서로 폴백 — 모호성 없는 단어는 결정론적
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { reverseConvert, parseYaleWordGreedy } from '../src/converter/y2h.js';
+import { reverseConvert, parseYaleWordGreedy, parseYaleWordCandidates } from '../src/converter/y2h.js';
 
 describe('reverseConvert (Yale → 한글, 탐욕 폴백)', () => {
   test('빈 입력', () => {
@@ -63,6 +63,31 @@ describe('parseYaleWordGreedy', () => {
     assert.equal(parseYaleWordGreedy('pu', { labial: false }), '브');
     // 진짜 '프'를 만들려면 phu (ph=ㅍ)
     assert.equal(parseYaleWordGreedy('phu', { labial: false }), '프');
+  });
+});
+
+describe('parseYaleWordCandidates (빈도 데이터 없을 때 — best 1개)', () => {
+  test('빈 입력은 빈 배열', () => {
+    assert.deepEqual(parseYaleWordCandidates(''), []);
+  });
+
+  test('. 또는 -가 있는 단어는 best 1개만', () => {
+    const cands = parseYaleWordCandidates('al-keyss-ta');
+    assert.equal(cands.length, 1);
+    assert.equal(cands[0].hangul, '알겠다');
+  });
+
+  test('빈도 데이터 없으면 (greedy 폴백) 1개만', () => {
+    // 빈도 데이터 미주입 — 모듈 import 시점에 syllableFreq=null
+    const cands = parseYaleWordCandidates('hankwuk');
+    assert.equal(cands.length, 1);
+    assert.equal(cands[0].hangul, '한국');
+  });
+
+  test('각 후보 객체는 {hangul, score} 형태', () => {
+    const cands = parseYaleWordCandidates('hankwuk');
+    assert.ok(typeof cands[0].hangul === 'string');
+    assert.ok(typeof cands[0].score === 'number');
   });
 });
 
