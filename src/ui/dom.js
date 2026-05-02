@@ -130,23 +130,22 @@ function buildExamples(text, opts) {
 // 형식별 출력 텍스트 생성
 function buildFormattedOutput(text, opts, format) {
   if (!text || !text.trim()) return '';
+  const numbered = !!$exampleNumbering?.checked;
   if (format === 'plain' || !format) {
-    // y2h 모드 + override 있으면 word 기반(buildExamples) 처리해 사용자 선택 반영,
-    // 그 외는 reverseConvert 통째 호출(줄바꿈/구두점 보존)
-    if (state.conversionDir === 'y2h' && wordOverrides.size > 0) {
-      return formatPlain(buildExamples(text, opts));
-    }
+    // numbered ON 또는 y2h+override 시 examples 경로(줄별 처리),
+    // 그 외 fast-path: 통째 변환으로 줄바꿈/구두점 보존
+    const needsExamples = numbered || (state.conversionDir === 'y2h' && wordOverrides.size > 0);
+    if (needsExamples) return formatPlain(buildExamples(text, opts), { numbered });
     return state.conversionDir === 'y2h'
       ? reverseConvert(text, opts)
       : convert(text, opts);
   }
   const examples = buildExamples(text, opts);
-  const numbered = !!$exampleNumbering?.checked;
   switch (format) {
     case 'gloss': return formatLeipzigTSV(examples, { numbered });
     case 'latex': return formatLatex(examples);
     case 'markdown': return formatMarkdown(examples, { numbered });
-    default: return formatPlain(examples);
+    default: return formatPlain(examples, { numbered });
   }
 }
 

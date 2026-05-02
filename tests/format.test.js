@@ -11,12 +11,20 @@ const sample = [
 ];
 
 describe('formatPlain', () => {
-  test('변환 결과(romas)만 줄바꿈으로 결합', () => {
+  test('번호 OFF: 변환 결과(romas)만 줄바꿈으로 결합', () => {
     assert.equal(formatPlain(sample), 'hankwukelul kongpu hanta\nannyenghaseyyo');
+  });
+
+  test('번호 ON: 각 줄 앞에 (1) (2) ...', () => {
+    assert.equal(
+      formatPlain(sample, { numbered: true }),
+      '(1) hankwukelul kongpu hanta\n(2) annyenghaseyyo'
+    );
   });
 
   test('빈 examples', () => {
     assert.equal(formatPlain([]), '');
+    assert.equal(formatPlain([], { numbered: true }), '');
   });
 });
 
@@ -93,6 +101,13 @@ describe('formatSingleExample', () => {
 
   test('plain', () => {
     assert.equal(formatSingleExample(tokens, romas, 'plain'), '한국어\nhankwuke');
+  });
+
+  test('plain with number', () => {
+    assert.equal(
+      formatSingleExample(tokens, romas, 'plain', { numbered: true, exampleIndex: 1 }),
+      '한국어\n(2) hankwuke'
+    );
   });
 
   test('gloss without number', () => {

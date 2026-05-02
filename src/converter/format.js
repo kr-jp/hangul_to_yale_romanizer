@@ -2,8 +2,10 @@
 // 변환 자체에는 관여하지 않음 — 호출자가 미리 변환된 examples를 넘긴다
 
 // Plain: examples를 줄별로 변환 결과(romas)만 출력
-export function formatPlain(examples) {
-  return examples.map(ex => ex.romas.join(' ')).join('\n');
+export function formatPlain(examples, { numbered = false } = {}) {
+  return examples
+    .map((ex, i) => (numbered ? `(${i + 1}) ` : '') + ex.romas.join(' '))
+    .join('\n');
 }
 
 // Leipzig Glossing Rules — TSV (원문 / 변환 두 행, 토큰을 탭으로 구분)
@@ -58,8 +60,10 @@ export function formatSingleExample(tokens, romas, format, { numbered = false, e
       return num + tokens.join('\t') + '\n' + blank + romas.join('\t');
     }
     case 'plain':
-    default:
-      return tokens.join(' ') + '\n' + romas.join(' ');
+    default: {
+      const num = numbered ? `(${exampleIndex + 1}) ` : '';
+      return tokens.join(' ') + '\n' + num + romas.join(' ');
+    }
   }
 }
 
@@ -69,6 +73,6 @@ export function formatOutput(examples, format, { numbered = false } = {}) {
     case 'gloss': return formatLeipzigTSV(examples, { numbered });
     case 'latex': return formatLatex(examples);
     case 'markdown': return formatMarkdown(examples, { numbered });
-    default: return formatPlain(examples);
+    default: return formatPlain(examples, { numbered });
   }
 }
