@@ -865,8 +865,6 @@ export function init() {
   $histList?.addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
-    // renderHistory()로 타겟 detach되면 document 외부클릭 핸들러가 드로어를 닫는다 — 차단
-    e.stopPropagation();
     const id = Number(btn.dataset.id);
     const act = btn.dataset.act;
 
@@ -930,7 +928,10 @@ export function init() {
     renderHistory();
   });
 
-  // 드로어
+  // 드로어 — 내부 클릭이 document 외부클릭 핸들러로 새어나가는 걸 차단
+  // (renderHistory()가 DOM 재구축할 때 클릭 타겟이 detach되어 closest() 실패하는 문제 예방)
+  $refDrawer?.addEventListener('click', (e) => e.stopPropagation());
+  $histDrawer?.addEventListener('click', (e) => e.stopPropagation());
   $openRef?.addEventListener('click', () => { buildRefTable(); openDrawer($refDrawer, $openRef); });
   $closeRef?.addEventListener('click', () => closeDrawer($refDrawer, $openRef));
   $openHist?.addEventListener('click', () => { renderHistory(); openDrawer($histDrawer, $openHist); });
@@ -983,11 +984,14 @@ export function init() {
   });
 
   // 메인 화면/배경 클릭으로 드로어 닫기
+  // (드로어 내부 클릭은 위 stopPropagation으로 여기까지 도달하지 않음)
   document.addEventListener('click', (e) => {
-    const insideRef = e.target.closest?.('#refDrawer, #openRef, #closeRef');
-    const insideHist = e.target.closest?.('#historyDrawer, #openHist, #closeHist, #histList, .drawer-tools');
-    if (!insideRef && $refDrawer.classList.contains('open')) closeDrawer($refDrawer, $openRef);
-    if (!insideHist && $histDrawer.classList.contains('open')) closeDrawer($histDrawer, $openHist);
+    if (e.target.closest?.('#openRef') == null && $refDrawer.classList.contains('open')) {
+      closeDrawer($refDrawer, $openRef);
+    }
+    if (e.target.closest?.('#openHist') == null && $histDrawer.classList.contains('open')) {
+      closeDrawer($histDrawer, $openHist);
+    }
   });
   $backdrop?.addEventListener('click', () => {
     if ($refDrawer.classList.contains('open')) closeDrawer($refDrawer, $openRef);
