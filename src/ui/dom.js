@@ -8,6 +8,7 @@ import {
 import {
   state, setDirection, setLang, setFormat, setTheme,
   loadHistory, saveHistory, addHistoryItem,
+  addTagToHistoryItem, removeTagFromHistoryItem, getAllTags,
 } from './state.js';
 import I18N from '../i18n/messages.json' with { type: 'json' };
 
@@ -62,6 +63,14 @@ const $downloadBtn = document.getElementById('downloadBtn');
 const $labelDownload = document.getElementById('labelDownload');
 const $shareBtn = document.getElementById('shareBtn');
 const $labelShare = document.getElementById('labelShare');
+const $backupBtn = document.getElementById('backupBtn');
+const $labelBackup = document.getElementById('labelBackup');
+const $histSearch = document.getElementById('histSearch');
+const $histTagFilter = document.getElementById('histTagFilter');
+
+// 히스토리 필터 상태
+let histSearchQuery = '';
+let histActiveTag = null; // 선택된 태그 또는 null
 
 let COPIED_TEXT = 'Copied!';
 
@@ -343,16 +352,37 @@ function persistHistoryDebounced() {
 }
 
 function renderHistory() {
-  const hist = loadHistory().sort((a, b) => (b.pinned - a.pinned) || (b.id - a.id));
+  const T = I18N[state.currentLang] || I18N.ja;
+  const all = loadHistory().sort((a, b) => (b.pinned - a.pinned) || (b.id - a.id));
+
+  // 검색·태그 필터 적용
+  const q = histSearchQuery.trim().toLowerCase();
+  const filtered = all.filter(h => {
+    if (histActiveTag && !(h.tags || []).includes(histActiveTag)) return false;
+    if (q && !h.text.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // 태그 필터 영역 렌더 (모든 태그)
+  renderTagFilter();
+
   $histList.innerHTML = '';
-  if (hist.length === 0) {
+  if (all.length === 0) {
     const p = document.createElement('p');
     p.className = 'hint';
-    p.textContent = (I18N[state.currentLang] || I18N.ja).emptyHist;
+    p.textContent = T.emptyHist;
     $histList.appendChild(p);
     return;
   }
-  for (const h of hist) {
+  if (filtered.length === 0) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = T.noMatch || 'No match';
+    $histList.appendChild(p);
+    return;
+  }
+
+  for (const h of filtered) {
     const div = document.createElement('div');
     div.className = 'history-item';
     const firstLine = (h.text.split(/\r?\n/)[0] || '').slice(0, 80);
@@ -382,6 +412,32 @@ function renderHistory() {
     mono.className = 'mono';
     mono.textContent = firstLine + (h.text.length > 80 ? '…' : '');
 
+    // 태그 영역: 기존 태그 chip + "+" 버튼
+    const tagRow = document.createElement('div');
+    tagRow.className = 'hist-tags';
+    for (const tag of (h.tags || [])) {
+      const tagEl = document.createElement('span');
+      tagEl.className = 'hist-tag';
+      tagEl.textContent = tag;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'hist-tag-x';
+      x.dataset.act = 'untag';
+      x.dataset.id = h.id;
+      x.dataset.tag = tag;
+      x.textContent = '×';
+      x.setAttribute('aria-label', `Remove tag ${tag}`);
+      tagEl.appendChild(x);
+      tagRow.appendChild(tagEl);
+    }
+    const addTagBtn = document.createElement('button');
+    addTagBtn.type = 'button';
+    addTagBtn.className = 'hist-tag-add';
+    addTagBtn.dataset.act = 'addtag';
+    addTagBtn.dataset.id = h.id;
+    addTagBtn.textContent = '+ tag';
+    tagRow.appendChild(addTagBtn);
+
     const tools = document.createElement('div');
     tools.className = 'hist-tools';
     for (const [act, label] of [['restore', 'Restore'], ['pin', h.pinned ? 'Unpin' : 'Pin'], ['delete', 'Delete']]) {
@@ -395,8 +451,29 @@ function renderHistory() {
 
     div.appendChild(meta);
     div.appendChild(mono);
+    div.appendChild(tagRow);
     div.appendChild(tools);
     $histList.appendChild(div);
+  }
+}
+
+// 태그 필터 영역 — 모든 태그 chip + 활성 표시
+function renderTagFilter() {
+  if (!$histTagFilter) return;
+  const tags = getAllTags();
+  $histTagFilter.innerHTML = '';
+  if (tags.length === 0) {
+    $histTagFilter.classList.add('hidden');
+    return;
+  }
+  $histTagFilter.classList.remove('hidden');
+  for (const tag of tags) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'hist-tag-chip' + (tag === histActiveTag ? ' active' : '');
+    chip.dataset.tag = tag;
+    chip.textContent = tag;
+    $histTagFilter.appendChild(chip);
   }
 }
 
@@ -550,6 +627,9 @@ function applyLang(lang) {
   if ($labelExampleNum) $labelExampleNum.textContent = T.labelExampleNum || '';
   if ($labelDownload) $labelDownload.textContent = T.labelDownload || '';
   if ($labelShare) $labelShare.textContent = T.labelShare || '';
+  if ($labelBackup) $labelBackup.textContent = T.labelBackup || '';
+  if ($backupBtn && T.backupTooltip) $backupBtn.title = T.backupTooltip;
+  if ($histSearch) $histSearch.placeholder = T.histSearchPlaceholder || '';
   COPIED_TEXT = T.copied;
 }
 
@@ -596,6 +676,44 @@ const FORMAT_FILE_INFO = {
   latex:    { ext: 'tex', mime: 'application/x-tex' },
   markdown: { ext: 'md',  mime: 'text/markdown' },
 };
+
+// 전체 상태(입력+출력+옵션+공유 URL+override)를 단일 JSON으로 다운로드
+function downloadBackup() {
+  const T = I18N[state.currentLang] || I18N.ja;
+  const inputText = $in.value || '';
+  if (!inputText.trim()) { showToast(T.noContent); return; }
+  const opts = getOpts();
+  const backup = {
+    version: 1,
+    tool: 'Hangul ↔ Yale Romanizer',
+    exportedAt: new Date().toISOString(),
+    direction: state.conversionDir,
+    options: {
+      labial: opts.labial,
+      separator: opts.sep,
+      separatorEnabled: !!$sepEnable?.checked,
+      interlinear: !!$interlinearMode?.checked,
+      format: state.currentFormat,
+      exampleNumbering: !!$exampleNumbering?.checked,
+    },
+    input: inputText,
+    output: $out.value || '',
+    wordOverrides: wordOverrides.size > 0 ? Object.fromEntries(wordOverrides) : {},
+    shareUrl: buildShareUrl(),
+  };
+  const json = JSON.stringify(backup, null, 2);
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `yale-backup-${stamp}.json`;
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 function downloadResult() {
   const text = $out.value || '';
@@ -749,11 +867,28 @@ export function init() {
     const btn = e.target.closest('button[data-act]');
     if (!btn) return;
     const id = Number(btn.dataset.id);
+    const act = btn.dataset.act;
+
+    // 태그 추가/제거
+    if (act === 'addtag') {
+      const T = I18N[state.currentLang] || I18N.ja;
+      const tag = window.prompt(T.addTagPrompt || 'Add tag');
+      if (tag) {
+        addTagToHistoryItem(id, tag);
+        renderHistory();
+      }
+      return;
+    }
+    if (act === 'untag') {
+      removeTagFromHistoryItem(id, btn.dataset.tag);
+      renderHistory();
+      return;
+    }
+
     let hist = loadHistory();
     const idx = hist.findIndex(h => h.id === id);
     if (idx < 0) return;
 
-    const act = btn.dataset.act;
     if (act === 'restore') {
       const h = hist[idx];
       $in.value = h.text;
@@ -770,7 +905,28 @@ export function init() {
       renderHistory();
     }
   });
-  $clearHist?.addEventListener('click', () => { saveHistory([]); renderHistory(); });
+  $clearHist?.addEventListener('click', () => {
+    saveHistory([]);
+    histActiveTag = null;
+    histSearchQuery = '';
+    if ($histSearch) $histSearch.value = '';
+    renderHistory();
+  });
+
+  // 검색 입력
+  $histSearch?.addEventListener('input', (e) => {
+    histSearchQuery = e.target.value || '';
+    renderHistory();
+  });
+
+  // 태그 필터 chip 클릭
+  $histTagFilter?.addEventListener('click', (e) => {
+    const chip = e.target.closest('.hist-tag-chip');
+    if (!chip) return;
+    const tag = chip.dataset.tag;
+    histActiveTag = (histActiveTag === tag) ? null : tag;
+    renderHistory();
+  });
 
   // 드로어
   $openRef?.addEventListener('click', () => { buildRefTable(); openDrawer($refDrawer, $openRef); });
@@ -845,8 +1001,9 @@ export function init() {
     applyLang(state.currentLang === 'ja' ? 'ko' : 'ja');
   });
 
-  // 다운로드 / URL 공유
+  // 다운로드 / 백업 / URL 공유
   $downloadBtn?.addEventListener('click', downloadResult);
+  $backupBtn?.addEventListener('click', downloadBackup);
   $shareBtn?.addEventListener('click', shareUrl);
 
   // 파일 드래그 앤 드롭

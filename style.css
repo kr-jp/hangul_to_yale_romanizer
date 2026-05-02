@@ -588,6 +588,56 @@ body {
 .drawer-body .hint { margin-top: 16px; display: block; }
 .hint a.btn { margin-left: 12px; margin-top: 8px; }
 
+/* ===== 히스토리 검색·필터 ===== */
+.hist-filters {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hist-search-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.hist-search-input:focus {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.hist-tag-filter {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.hist-tag-filter.hidden { display: none; }
+.hist-tag-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 120ms ease;
+}
+.hist-tag-chip:hover { border-color: var(--accent); color: var(--text); }
+.hist-tag-chip.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 500;
+}
+
 /* ===== 히스토리 ===== */
 .history-item {
   border: 1px solid var(--border);
@@ -617,6 +667,48 @@ body {
   font-family: var(--mono);
 }
 .pin { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+/* 항목 내 태그 영역 */
+.hist-tags {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.hist-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  border-radius: 999px;
+  padding: 2px 4px 2px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.hist-tag-x {
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 50%;
+}
+.hist-tag-x:hover { background: rgba(0,0,0,0.08); }
+.hist-tag-add {
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 120ms ease;
+}
+.hist-tag-add:hover { border-style: solid; border-color: var(--accent); color: var(--accent-text); }
 .mono {
   font-family: var(--mono);
   font-size: 13px;

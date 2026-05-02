@@ -100,6 +100,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M12 3v12M6 11l6 6 6-6M5 21h14"/></svg>
             <span id="labelDownload"></span>
           </button>
+          <button id="backupBtn" class="btn btn-ghost" type="button" aria-label="Backup full state as JSON" title="">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" aria-hidden="true"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+            <span id="labelBackup"></span>
+          </button>
           <div class="format-group">
             <span id="labelFormat" class="format-label"></span>
             <div class="chips" id="formatChips" role="group" aria-label="output format">
@@ -147,6 +151,10 @@
           <button id="clearHist" class="btn btn-ghost"></button>
           <button id="closeHist" class="btn btn-ghost"></button>
         </div>
+      </div>
+      <div class="hist-filters">
+        <input id="histSearch" type="search" class="hist-search-input" />
+        <div id="histTagFilter" class="hist-tag-filter"></div>
       </div>
       <div id="histList" class="drawer-body history-list">
         <!-- JS가 이력 렌더링 -->

@@ -1,8 +1,15 @@
 // Yale → 한글 역변환 테스트.
 // 빈도 데이터를 주입하지 않으면 탐욕 파서로 폴백 — 모호성 없는 단어는 결정론적
-import { test, describe } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { reverseConvert, parseYaleWordGreedy, parseYaleWordCandidates } from '../src/converter/y2h.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import {
+  reverseConvert, parseYaleWordGreedy, parseYaleWordCandidates, setFrequencyData,
+} from '../src/converter/y2h.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('reverseConvert (Yale → 한글, 탐욕 폴백)', () => {
   test('빈 입력', () => {
@@ -88,6 +95,54 @@ describe('parseYaleWordCandidates (빈도 데이터 없을 때 — best 1개)', 
     const cands = parseYaleWordCandidates('hankwuk');
     assert.ok(typeof cands[0].hangul === 'string');
     assert.ok(typeof cands[0].score === 'number');
+  });
+});
+
+describe('실제 빈도 데이터 주입 — 빔서치 DP 경로', () => {
+  before(() => {
+    const data = JSON.parse(readFileSync(join(__dirname, '../data/syllable-freq.json'), 'utf-8'));
+    setFrequencyData({ syllable: data.u, bigram: data.b, word: data.w });
+  });
+  after(() => setFrequencyData({ syllable: null, bigram: null, word: null }));
+
+  test('cenel — 모호성 단어, 후보 2개 이상', () => {
+    const cands = parseYaleWordCandidates('cenel');
+    assert.ok(cands.length >= 2, `후보 2개 이상 기대, 실제 ${cands.length}`);
+  });
+
+  test('cenel — 후보 목록에 "저널"과 "전얼" 모두 포함', () => {
+    const cands = parseYaleWordCandidates('cenel');
+    const hanguls = cands.map(c => c.hangul);
+    assert.ok(hanguls.includes('저널'), `'저널' 포함 기대, 실제: ${hanguls.join(', ')}`);
+    assert.ok(hanguls.includes('전얼'), `'전얼' 포함 기대, 실제: ${hanguls.join(', ')}`);
+  });
+
+  test('hankwuk — 결정론적이고 best는 "한국"', () => {
+    const cands = parseYaleWordCandidates('hankwuk');
+    assert.equal(cands[0].hangul, '한국');
+  });
+
+  test('reverseConvert — 빈도 데이터 활용 (cenel은 모호성, best 한 개로 결정)', () => {
+    const result = reverseConvert('cenel');
+    // best가 후보 목록의 첫 번째와 일치해야 함
+    const cands = parseYaleWordCandidates('cenel');
+    assert.equal(result, cands[0].hangul);
+  });
+
+  test('reverseConvert — 단어 보너스로 "공부"가 분리되어 잡힘', () => {
+    assert.equal(reverseConvert('kongpwu'), '공부');
+  });
+
+  test('. 또는 -로 명시된 음절 경계는 후보 1개 (DP 무시)', () => {
+    const cands = parseYaleWordCandidates('al-keyss-ta');
+    assert.equal(cands.length, 1);
+    assert.equal(cands[0].hangul, '알겠다');
+  });
+
+  test('각 후보 객체는 score 점수가 음수 (log 확률)', () => {
+    const cands = parseYaleWordCandidates('cenel');
+    assert.ok(cands.every(c => typeof c.score === 'number'));
+    assert.ok(cands[0].score >= cands[cands.length - 1].score, 'best가 가장 높은 점수');
   });
 });
 

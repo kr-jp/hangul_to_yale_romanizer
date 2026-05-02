@@ -31,7 +31,12 @@
     "labelShare": "URL共有",
     "shareCopied": "共有URLをコピーしました!",
     "fileTooLarge": "ファイルが大きすぎます (5MB制限)",
-    "noContent": "ダウンロードする内容がありません"
+    "noContent": "ダウンロードする内容がありません",
+    "labelBackup": "バックアップ",
+    "backupTooltip": "入力・出力・オプションをまとめてJSONで保存",
+    "histSearchPlaceholder": "履歴を検索...",
+    "addTagPrompt": "タグを入力",
+    "noMatch": "一致する履歴がありません。"
   },
   "ko": {
     "openHist": "변환 기록",
@@ -65,6 +70,11 @@
     "labelShare": "URL 공유",
     "shareCopied": "공유 URL이 복사되었습니다!",
     "fileTooLarge": "파일이 너무 큽니다 (5MB 제한)",
-    "noContent": "다운로드할 내용이 없습니다"
+    "noContent": "다운로드할 내용이 없습니다",
+    "labelBackup": "백업",
+    "backupTooltip": "입력·출력·옵션을 JSON 한 파일로 저장",
+    "histSearchPlaceholder": "기록 검색...",
+    "addTagPrompt": "태그 입력",
+    "noMatch": "일치하는 기록이 없습니다."
   }
 }
