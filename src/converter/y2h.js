@@ -88,6 +88,13 @@ export function reverseConvert(text, { labial = true } = {}) {
 
 // '.', '-'로 세그먼트 분할 후, 자음만 있는 세그먼트는 앞 음절의 종성으로 결합
 export function parseYaleWord(word, { labial = true } = {}) {
+  // 어말 '.' run은 음절 경계가 아니라 문장부호로 취급 — 분리 후 결과에 재부착 (2026-06-12).
+  // 어말 '-'는 어간 표기(mek- 등)일 수 있어 기존 동작을 유지한다.
+  const trail = word.match(/\.+$/);
+  if (trail) {
+    const stem = word.slice(0, -trail[0].length);
+    return stem ? parseYaleWord(stem, { labial }) + trail[0] : trail[0];
+  }
   const segments = word.split(/[.\-]/);
   const results = [];
   const parseSeg = (seg) => (syllableFreq && bigramFreq)
@@ -144,14 +151,28 @@ export function parseYaleWord(word, { labial = true } = {}) {
 
 // 한 word의 top-K 한글 후보를 반환. 모호성 없는 단어는 후보 1개.
 // .나 -로 음절 경계가 명시되어 있거나 빈도 데이터가 없으면 best 1개만.
+// 단, 어말 '.' run은 경계가 아니라 문장부호로 취급해 suffix로 이동 (parseYaleWord와 일관).
 // word에 비-Yale 문자(?, ,, ! 등)가 섞여 있으면 Yale 코어만 추출 후 prefix/suffix 보존
 export function parseYaleWordCandidates(word, { labial = true } = {}, k = 5) {
   if (!word) return [];
+  const runs = word.match(/[a-zA-Z.\-]+/g);
+  // Yale run이 없는 토큰(숫자·기호 등)은 원형 그대로 후보 1개 — 토큰 소실 방지 (2026-06-12)
+  if (!runs) return [{ hangul: word, score: 0 }];
+  // run이 2개 이상(내부 구두점 혼합, 예: 'ka,na')이면 각 run을 결정론 변환해 제자리 치환.
+  // 후보 분기는 단일 run일 때만 — 혼합 토큰은 best 1개로 변환 누락만 방지 (2026-06-12)
+  if (runs.length > 1) {
+    const hangul = word.replace(/[a-zA-Z.\-]+/g, (r) => parseYaleWord(r.toLowerCase(), { labial }));
+    return [{ hangul, score: 0 }];
+  }
   const m = word.match(/[a-zA-Z.\-]+/);
-  if (!m) return [];
-  const core = m[0];
+  let core = m[0];
+  let suffix = word.slice(m.index + core.length);
   const prefix = word.slice(0, m.index);
-  const suffix = word.slice(m.index + core.length);
+  const trail = core.match(/\.+$/);
+  if (trail && trail[0].length < core.length) {
+    core = core.slice(0, -trail[0].length);
+    suffix = trail[0] + suffix;
+  }
   const w = core.toLowerCase();
   let candidates;
   if (/[.\-]/.test(w) || !syllableFreq || !bigramFreq) {
