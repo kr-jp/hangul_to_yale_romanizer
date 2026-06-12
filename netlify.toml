@@ -1,0 +1,8 @@
+# Netlify 빌드 설정 (Vite)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Vite 8은 Node 20.19+/22.12+ 필요 — 기존 사이트의 구버전 기본값에 의존하지 않도록 고정
+[build.environment]
+  NODE_VERSION = "22"

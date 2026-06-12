@@ -36,7 +36,11 @@
     "backupTooltip": "入力・出力・オプションをまとめてJSONで保存",
     "histSearchPlaceholder": "履歴を検索...",
     "addTagPrompt": "タグを入力",
-    "noMatch": "一致する履歴がありません。"
+    "noMatch": "一致する履歴がありません。",
+    "labelGloss": "グロス編集",
+    "labelTabCopy": "タブ区切り",
+    "glossPlaceholder": "グロス",
+    "hintGloss": "3行目にグロスを入力します。空欄のままなら出力は従来の2行と同じです。"
   },
   "ko": {
     "openHist": "변환 기록",
@@ -75,6 +79,10 @@
     "backupTooltip": "입력·출력·옵션을 JSON 한 파일로 저장",
     "histSearchPlaceholder": "기록 검색...",
     "addTagPrompt": "태그 입력",
-    "noMatch": "일치하는 기록이 없습니다."
+    "noMatch": "일치하는 기록이 없습니다.",
+    "labelGloss": "글로스 편집",
+    "labelTabCopy": "탭 구분",
+    "glossPlaceholder": "글로스",
+    "hintGloss": "셋째 행에 글로스를 입력합니다. 비워 두면 출력은 기존 2행과 동일합니다."
   }
 }
