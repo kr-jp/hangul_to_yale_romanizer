@@ -4,3 +4,5 @@
 .claude/
 node_modules/
 dist/
+# 빌드 시 생성 (scripts/gen-third-party-licenses.mjs)
+public/third-party-licenses.txt

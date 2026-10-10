@@ -7,11 +7,12 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "dev": "vite",
+    "prebuild": "node scripts/gen-third-party-licenses.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
-  "license": "MIT",
+  "license": "MIT AND CC-BY-SA-4.0",
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",
     "@types/node": "^25.9.3",
