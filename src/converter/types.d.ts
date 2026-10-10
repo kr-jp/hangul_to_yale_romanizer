@@ -5,14 +5,15 @@ declare module '*/converter/h2y.js' {
 }
 
 declare module '*/converter/y2h.js' {
-  // keepHyphens: 어절 내부 '-'(형태소 경계)를 한글 출력에 남김 (기본 false)
-  type Y2HOpts = { labial?: boolean; keepHyphens?: boolean };
+  import type { UserDict, YaleCandidate } from '../lib/types';
+  // keepHyphens: 어절 내부 '-'(형태소 경계)를 한글 출력에 남김 (기본 false). dict: 사용자 사전
+  type Y2HOpts = { labial?: boolean; keepHyphens?: boolean; dict?: UserDict | null };
+  // run 본체 구성 — key = 소문자 본체, segments = '.'/'-'로 나뉜 구간(소문자), vowel = 구간에 모음이 있는지
+  type RunInfo = { lead: string; tail: string; key: string; segments: string[]; vowel: boolean[] };
   export function reverseConvert(text: string, opts?: Y2HOpts): string;
-  export function parseYaleWordCandidates(
-    word: string,
-    opts?: Y2HOpts,
-    k?: number,
-  ): Array<{ hangul: string; score: number }>;
+  export function parseYaleWordCandidates(word: string, opts?: Y2HOpts, k?: number): YaleCandidate[];
+  export function analyzeToken(word: string): (RunInfo & { prefix: string; suffix: string }) | null;
+  export function yaleRunsIn(text: string): RunInfo[];
   export function setFrequencyData(d: {
     syllable?: object | null;
     bigram?: object | null;

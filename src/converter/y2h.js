@@ -31,9 +31,21 @@ let bigramFreq = null;
 let wordFreq = null;
 
 // run 단위 후보 캐시 — 같은 어절의 반복·타이핑 중 재계산을 피한다 (대량 입력 성능).
-// 결과가 빈도 데이터·옵션에 따라 달라지므로 키에 옵션을 넣고, 데이터 주입 시 비운다
+// 결과가 빈도 데이터·옵션에 따라 달라지므로 키에 옵션을 넣고, 데이터 주입 시 비운다.
+// 사용자 사전(opts.dict)이 있으면 사전 객체마다 별도 캐시 — 사전을 고치면 새 객체가 되어 자연히 새 캐시
 const runCache = new Map();
+let dictCaches = new WeakMap();
 const RUN_CACHE_MAX = 50000;
+
+function cacheFor(dict) {
+  if (!dict) return runCache;
+  let cache = dictCaches.get(dict);
+  if (!cache) {
+    cache = new Map();
+    dictCaches.set(dict, cache);
+  }
+  return cache;
+}
 
 // UI 레이어가 fetch 후 호출. {syllable, bigram, word} 형태로 주입
 export function setFrequencyData({ syllable = null, bigram = null, word = null } = {}) {
@@ -41,6 +53,7 @@ export function setFrequencyData({ syllable = null, bigram = null, word = null }
   bigramFreq = bigram;
   wordFreq = word;
   runCache.clear();
+  dictCaches = new WeakMap();
 }
 
 // 빔서치/단어 보너스 가중치
@@ -74,8 +87,56 @@ function allTokensAt(str, pos, tokenSet) {
 // Yale run: Yale 로마자와 경계 기호(. -)의 연속. 그 밖의 문자(공백·숫자·괄호 등)는 변환하지 않고 보존
 const YALE_RUN = /[a-zA-Z.\-]+/g;
 
+// Yale에 쓰이지 않는 로마자(b d f j q r v x z, ng 밖의 g)가 든 구간은 영어 이름 등 다른 표기로 보고
+// 원문 그대로 둔다 (John-un → John-은). 대문자로만 된 2글자 이상(IP, NOM 등 약어·범주 기호)도 같다
+const NON_YALE = /[bdfjqrvxz]|(?<!n)g/;
+const ALL_CAPS = /^[A-Z]{2,}$/;
+function isForeignSegment(raw) {
+  return NON_YALE.test(raw.toLowerCase()) || ALL_CAPS.test(raw);
+}
+
+// run → 선두 기호(lead) + 본체(core) + 말미 기호(tail)
+function splitRun(run) {
+  const lead = run.match(/^[.\-]+/)?.[0] ?? '';
+  const rest = run.slice(lead.length);
+  const tail = rest.match(/[.\-]+$/)?.[0] ?? '';
+  return { lead, core: rest.slice(0, rest.length - tail.length), tail };
+}
+
+// run의 본체 구성 — key = 사전 키(소문자 본체), segments = '.'/'-'로 나뉜 구간(소문자),
+// vowel = 구간에 모음 글자가 있는지 (없으면 자음만의 형태소). 본체가 없으면 null
+function runInfo(run) {
+  const { lead, core, tail } = splitRun(run);
+  if (!core) return null;
+  const segments = core.split(/[.\-]+/).map((s) => s.toLowerCase());
+  return { lead, tail, key: core.toLowerCase(), segments, vowel: segments.map((s) => /[aeiou]/.test(s)) };
+}
+
+// 후보 창(사용자 사전 학습)용 토큰 구성. Yale run이 정확히 1개이고 본체가 있을 때만, 아니면 null.
+// prefix/suffix = run 앞뒤의 비-Yale 문자(구두점 등), lead/tail = run 앞뒤의 '.'/'-'
+export function analyzeToken(word) {
+  if (!word) return null;
+  const runs = [...word.matchAll(YALE_RUN)];
+  if (runs.length !== 1) return null;
+  const info = runInfo(runs[0][0]);
+  if (!info) return null;
+  const m = runs[0];
+  return { ...info, prefix: word.slice(0, m.index), suffix: word.slice(m.index + m[0].length) };
+}
+
+// 텍스트 안의 모든 Yale run 구성 (사용자 사전 항목이 실제로 쓰이는지 판정용)
+export function yaleRunsIn(text) {
+  const out = [];
+  for (const m of (text || '').matchAll(YALE_RUN)) {
+    const info = runInfo(m[0]);
+    if (info) out.push(info);
+  }
+  return out;
+}
+
 // Yale → 한글 메인 진입점. 줄/공백/구두점은 그대로 보존.
-// opts: { labial = true, keepHyphens = false } — keepHyphens면 어절 내부 '-'(형태소 경계)를 출력에 남긴다
+// opts: { labial = true, keepHyphens = false, dict = null } — keepHyphens면 어절 내부 '-'(형태소 경계)를
+// 출력에 남긴다. dict는 사용자 사전 { words: Map, morphemes: Map } (src/lib/user-dict.ts)
 export function reverseConvert(text, opts = {}) {
   if (!text || !text.trim()) return '';
   return text.replace(YALE_RUN, (run, offset) =>
@@ -114,65 +175,123 @@ export function parseYaleWordCandidates(word, opts = {}, k = 5) {
 // - 구간별 후보를 빔으로 결합(점수 = 구간 점수의 합)하므로 하이픈이 든 어절도 후보를 고를 수 있다.
 //   1위는 구간별 최선의 연결과 같다 — 경계 바이그램을 더해도 정확도가 오르지 않아 넣지 않음 (실측)
 // - 자음만의 구간은 앞 음절의 종성으로 결합(ka-ss-ta → 갔다). 결합할 수 없거나 keepHyphens에서 '-' 뒤에
-//   오면, 형태소 표기 맥락(하이픈·괄호 인접, 숫자 인접 제외)의 소문자에 한해 자모로 쓴다
-//   (-(u)n → -(으)ㄴ, ka-ss-ta → 가-ㅆ-다). 그 밖에는 원문 그대로(NP, pp. 등)
+//   오면, 형태소 표기 맥락(하이픈·괄호 인접, 하이픈 없는 숫자 인접 제외)의 소문자에 한해 자모로 쓴다
+//   (-(u)n → -(으)ㄴ, ka-ss-ta → 가-ㅆ-다, ku]-n1 → 그]-ㄴ1). 그 밖에는 원문 그대로(NP, pp., 214m)
+// - Yale에 없는 글자가 든 구간(John)·대문자 약어(IP)는 원문 그대로. 숫자가 바로 붙은 단독 e는
+//   공범주 표기(e1)로 보고 그대로 둔다
+// - opts.dict(사용자 사전)가 있으면 사전 항목이 엔진 결과보다 우선 (사전 형식은 user-dict.ts)
+// 후보: { hangul, score, parts, dict } — parts는 구간별 출력(자음 구간은 자모·원문), 사전 문자열을 그대로
+//   쓴 경우 null. dict는 사전 항목이 쓰였는지
 // ctx.before/after: run 바로 앞뒤의 문자 (run은 최장 일치이므로 로마자·'.'·'-'는 오지 않는다)
-function rankRun(run, { labial = true, keepHyphens = false } = {}, ctx = {}) {
+function rankRun(run, { labial = true, keepHyphens = false, dict = null } = {}, ctx = {}) {
   const pb = /[()]/.test(ctx.before || '');
   const pa = /[()]/.test(ctx.after || '');
   const db = /\d/.test(ctx.before || '');
   const da = /\d/.test(ctx.after || '');
+  const cache = cacheFor(dict);
   const key = [labial, keepHyphens, pb, pa, db, da].map(Number).join('') + '|' + run;
-  const cached = runCache.get(key);
+  const cached = cache.get(key);
   if (cached) return cached;
 
-  const lead = run.match(/^[.\-]+/)?.[0] ?? '';
-  const rest = run.slice(lead.length);
-  const tail = rest.match(/[.\-]+$/)?.[0] ?? '';
-  const core = rest.slice(0, rest.length - tail.length);
-
-  let result = [{ hangul: run, score: 0 }]; // 기호만으로 된 run('-', '...')은 그대로
+  const { lead, core, tail } = splitRun(run);
+  let result = [{ hangul: run, score: 0 }]; // 기호만으로 된 run('-', '...')과 공범주 e는 그대로
   if (core) {
     const pieces = core.split(/([.\-]+)/); // 짝수 인덱스 = 구간, 홀수 인덱스 = 경계 기호
     const lastIdx = pieces.length - 1;
-    // raw: 직전 구간이 변환되지 않고 원문 그대로 남았는지 (경계 기호 출력 판정용)
-    let beam = [{ hangul: '', score: 0, raw: false }];
-    for (let i = 0; i <= lastIdx; i += 2) {
-      const raw = pieces[i];
-      const seg = raw.toLowerCase();
-      const sep = i > 0 ? pieces[i - 1] : '';
-      const ellipsis = sep.includes('..');
-      const sepOut = (prevRaw, curRaw) =>
-        ellipsis || prevRaw || curRaw ? sep : keepHyphens ? sep.replace(/\./g, '') : '';
-      if (/[aeiou]/.test(seg)) {
-        const cands = segmentCandidates(seg, labial);
-        const next = [];
-        for (const b of beam) {
-          for (const c of cands) {
-            const curRaw = c.hangul.toLowerCase() === seg;
-            next.push({ hangul: b.hangul + sepOut(b.raw, curRaw) + c.hangul, score: b.score + c.score, raw: curRaw });
+    // 사전의 어절 항목: '-'로 나눈 값이 구간 수와 맞으면 구간별 강제값, 아니면 값 문자열 그대로
+    const wordValue = dict?.words?.get(core.toLowerCase());
+    const forced = wordValue === undefined ? null : wordValue.split('-');
+    if (forced && forced.length !== lastIdx / 2 + 1) {
+      result = [{ hangul: lead + wordValue + tail, score: 0, parts: null, dict: true }];
+    } else if (!forced && !lead && !tail && da && core === 'e') {
+      // 공범주 e₁ — PDF에서 복사하면 아래첨자가 일반 숫자가 된다 (어1이 되지 않게)
+    } else {
+      // raw: 직전 구간이 변환되지 않고 원문 그대로 남았는지 (경계 기호 출력 판정용)
+      let beam = [{ hangul: '', score: 0, raw: false, parts: [], dict: false }];
+      for (let i = 0; i <= lastIdx; i += 2) {
+        const raw = pieces[i];
+        const seg = raw.toLowerCase();
+        const sep = i > 0 ? pieces[i - 1] : '';
+        const ellipsis = sep.includes('..');
+        const sepOut = (prevRaw, curRaw) =>
+          ellipsis || prevRaw || curRaw ? sep : keepHyphens ? sep.replace(/\./g, '') : '';
+        if (/[aeiou]/.test(seg)) {
+          let forcedPart = forced ? forced[i / 2] : dict?.morphemes?.get(seg);
+          const foreign = forcedPart === undefined && isForeignSegment(raw);
+          // 받침 자음으로 시작하는 어미 표기(sa-nta → 사-ㄴ다·산다, ka-lkka → 가-ㄹ까·갈까): 그 자음은
+          // 자음만의 구간과 같은 규칙(앞 음절 받침에 결합, keepHyphens에서 '-' 뒤면 자모)으로, 나머지만 음절 변환
+          let pre = foreign ? null : leadingCoda(seg);
+          if (pre && forcedPart !== undefined) {
+            // 사전 값도 그 자모로 시작할 때만 나눈다 (ㄴ다 → ㄴ + 다). 아니면 값 그대로
+            const j = consonantJamo(pre);
+            if (forcedPart.startsWith(j)) forcedPart = forcedPart.slice(j.length);
+            else pre = null;
           }
+          const body = pre ? seg.slice(pre.length) : seg;
+          const cands =
+            forcedPart !== undefined
+              ? [{ hangul: forcedPart, score: 0, dict: true }]
+              : foreign
+                ? [{ hangul: raw, score: 0 }]
+                : segmentCandidates(body, labial);
+          const hyphenBefore = sep.includes('-');
+          const preRaw = pre ? raw.slice(0, pre.length) : '';
+          const preJamo = pre && preRaw === pre && !(i === 0 && db)
+            && (hyphenBefore || (i === 0 && (lead.includes('-') || pb)))
+            ? consonantJamo(pre)
+            : null;
+          const next = [];
+          for (const b of beam) {
+            // 앞 받침 자음까지 붙인 머리 (pre가 없으면 구간 사이 기호는 후보별로 정한다)
+            let head = null;
+            if (pre) {
+              const attached = (keepHyphens && hyphenBefore) || ellipsis ? null : attachCoda(b.hangul, pre);
+              head = attached ?? b.hangul + sepOut(b.raw, !preJamo) + (preJamo || preRaw);
+            }
+            for (const c of cands) {
+              const curRaw = !c.dict && c.hangul.toLowerCase() === body;
+              next.push({
+                hangul: (head ?? b.hangul + sepOut(b.raw, curRaw)) + c.hangul,
+                score: b.score + c.score,
+                raw: curRaw,
+                parts: [...b.parts, (pre ? preJamo || preRaw : '') + c.hangul],
+                dict: b.dict || !!c.dict,
+              });
+            }
+          }
+          beam = topCandidates(next);
+        } else {
+          const hyphenBefore = sep.includes('-');
+          const hyphenCtx = hyphenBefore || (i === 0 && lead.includes('-'));
+          // 숫자에 붙은 자음은 단위·기호(214m)로 본다. 단 하이픈 뒤의 형태소에 붙은 숫자는 지표(-n1)
+          const edgeDigit = (i === 0 && db) || (i === lastIdx && da && !hyphenCtx);
+          const morph = !edgeDigit && (hyphenBefore || (pieces[i + 1] || '').includes('-')
+            || (i === 0 && (lead.includes('-') || pb))
+            || (i === lastIdx && (tail.includes('-') || pa)));
+          const jamo = morph && raw === seg ? consonantJamo(seg) : null;
+          const natural = jamo || raw;
+          // 사전 값이 이 자음의 자모·원문과 다르면 그 문자열을 그대로 쓴다
+          const forcedPart = forced ? forced[i / 2] : undefined;
+          const literal = forcedPart !== undefined && forcedPart !== natural && forcedPart !== consonantJamo(seg)
+            ? forcedPart
+            : null;
+          beam = topCandidates(beam.map((b) => {
+            const parts = [...b.parts, literal ?? natural];
+            if (literal !== null) {
+              return { ...b, hangul: b.hangul + sepOut(b.raw, false) + literal, raw: false, parts, dict: true };
+            }
+            const attached = (keepHyphens && hyphenBefore) || ellipsis ? null : attachCoda(b.hangul, seg);
+            if (attached) return { ...b, hangul: attached, raw: false, parts };
+            return { ...b, hangul: b.hangul + sepOut(b.raw, !jamo) + natural, raw: !jamo, parts };
+          }));
         }
-        beam = topCandidates(next);
-      } else {
-        const hyphenBefore = sep.includes('-');
-        const edgeDigit = (i === 0 && db) || (i === lastIdx && da);
-        const morph = !edgeDigit && (hyphenBefore || (pieces[i + 1] || '').includes('-')
-          || (i === 0 && (lead.includes('-') || pb))
-          || (i === lastIdx && (tail.includes('-') || pa)));
-        const jamo = morph && raw === seg ? consonantJamo(seg) : null;
-        beam = topCandidates(beam.map((b) => {
-          const attached = (keepHyphens && hyphenBefore) || ellipsis ? null : attachCoda(b.hangul, seg);
-          if (attached) return { ...b, hangul: attached, raw: false };
-          return { ...b, hangul: b.hangul + sepOut(b.raw, !jamo) + (jamo || raw), raw: !jamo };
-        }));
       }
+      result = beam.map((b) => ({ hangul: lead + b.hangul + tail, score: b.score, parts: b.parts, dict: b.dict || !!forced }));
     }
-    result = beam.map((b) => ({ hangul: lead + b.hangul + tail, score: b.score }));
   }
   result.forEach(Object.freeze);
-  if (runCache.size >= RUN_CACHE_MAX) runCache.clear();
-  runCache.set(key, result);
+  if (cache.size >= RUN_CACHE_MAX) cache.clear();
+  cache.set(key, result);
   return result;
 }
 
@@ -209,6 +328,23 @@ function attachCoda(str, seg) {
   const vowel = JUNGSEONG[Math.floor((SIndex % NCount) / TCount)];
   const newChar = composeHangul(onset, vowel, newCoda);
   return newChar ? str.slice(0, -1) + newChar : null;
+}
+
+// Yale 음절(자음 1개 + 모음, 또는 모음)로 시작하는가
+function startsSyllable(s) {
+  if (matchYaleToken(s, 0, YALE_VOWELS)) return true;
+  const onset = matchYaleToken(s, 0, YALE_ONSETS);
+  return !!onset && !!matchYaleToken(s, onset.length, YALE_VOWELS);
+}
+
+// 구간이 받침 자음으로 시작하면(nta, lkka, pnita) 나머지가 음절로 시작하게 되는 가장 짧은 받침, 아니면 null
+function leadingCoda(seg) {
+  if (startsSyllable(seg)) return null;
+  for (let len = 1; len < seg.length; len++) {
+    const pre = seg.slice(0, len);
+    if ((YALE_DOUBLE_CODA[pre] || Y2J_CODA[pre]) && startsSyllable(seg.slice(len))) return pre;
+  }
+  return null;
 }
 
 // 자음만의 구간 → 호환 자모 (n → ㄴ, ss → ㅆ, lk → ㄺ, pp → ㅃ). Yale 자음이 아니면 null
