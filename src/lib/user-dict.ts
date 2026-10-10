@@ -1,18 +1,25 @@
-// 사용자 사전 — 후보 창에서 고르거나 직접 입력한 변환을 기억해 Yale→한글 변환에 우선 적용한다 (2026-10)
-//  - morphemes(형태소): '-'·'.'로 나뉜 구간 하나가 키와 같으면 그 구간을 값으로
-//    (mali → 마리면 Mali-nun, Mali-ka 모두 적용)
-//  - words(어절): 어절의 Yale 부분 전체가 키와 같을 때만. 값이 구간 수만큼 '-'로 나뉘어 있으면 구간별 값
-//    (하이픈 표시·종성 결합은 평소대로), 아니면 값 문자열 그대로
+// 사용자 사전 — 후보 창에서 고르거나 직접 입력한 변환을 치환 규칙으로 기억해 Yale→한글 변환에 우선 적용한다 (2026-10)
+// 형태소 분석은 하지 않는다. 규칙의 단위는 입력 표기(띄어쓰기·하이픈)다:
+//  - segment(구간 일치): '-'·'.'로 나뉜 부분 하나가 키와 같으면 어디에 나오든 그 부분을 값으로
+//    (mali → 마리면 Mali-nun, Mali-ka 모두)
+//  - whole(전체 일치): 띄어쓰기로 나뉜 표기의 Yale 부분 전체가 키와 같을 때만. 값이 구간 수만큼 '-'로 나뉘어 있으면
+//    구간별 값(하이픈 표시·종성 결합은 평소대로), 아니면 값 문자열 그대로
 // 키는 소문자 Yale. 실제 적용은 엔진(y2h.js rankRun)이 opts.dict로 받아서 한다
 import { analyzeToken, parseYaleWordCandidates, yaleRunsIn } from '../converter/y2h.js';
-import type { ConvertOpts, DictChange, DictEntry, DictScope, TokenEditInfo, UserDict, YaleCandidate } from './types';
+import { convert as hangulToYale } from '../converter/h2y.js';
+import {
+  CHOSEONG, JUNGSEONG, JONGSEONG, J2Y, NCount, SBase, TCount, composeHangul, isHangulSyllable,
+} from '../converter/hangul.js';
+import type {
+  ConvertOpts, CorrectionPlan, DictChange, DictEntry, DictScope, TokenEditInfo, UserDict, YaleCandidate,
+} from './types';
 
-export const EMPTY_DICT: UserDict = { words: new Map(), morphemes: new Map() };
+export const EMPTY_DICT: UserDict = { segment: new Map(), whole: new Map() };
 
-// 어절 키는 본체 그대로(내부 '-'·'.' 허용), 형태소 키는 구간 하나
+// 구간 키는 하이픈 없는 한 부분, 전체 키는 본체 그대로(내부 '-'·'.' 허용)
 const KEY_PATTERN: Record<DictScope, RegExp> = {
-  words: /^[a-z](?:[a-z.-]*[a-z])?$/,
-  morphemes: /^[a-z]+$/,
+  segment: /^[a-z]+$/,
+  whole: /^[a-z](?:[a-z.-]*[a-z])?$/,
 };
 export const VALUE_MAX = 60;
 
@@ -23,15 +30,15 @@ export const isValidKey = (scope: DictScope, key: string) => KEY_PATTERN[scope].
 export const isValidValue = (value: string) => value.length > 0 && value.length <= VALUE_MAX && !/\s/.test(value);
 
 export function dictSize(d: UserDict): number {
-  return d.words.size + d.morphemes.size;
+  return d.segment.size + d.whole.size;
 }
 
-// 표시용 목록 — 키 순, 같은 키는 형태소가 먼저
+// 표시용 목록 — 키 순, 같은 키는 구간 일치가 먼저
 export function entriesOf(d: UserDict): DictEntry[] {
   const out: DictEntry[] = [];
-  for (const [key, value] of d.morphemes) out.push({ scope: 'morphemes', key, value });
-  for (const [key, value] of d.words) out.push({ scope: 'words', key, value });
-  return out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.scope === 'morphemes' ? -1 : 1));
+  for (const [key, value] of d.segment) out.push({ scope: 'segment', key, value });
+  for (const [key, value] of d.whole) out.push({ scope: 'whole', key, value });
+  return out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : a.scope === 'segment' ? -1 : 1));
 }
 
 // over의 항목이 base보다 우선 (이번 세션 항목 > 저장된 사전)
@@ -39,8 +46,8 @@ export function mergeDicts(base: UserDict, over: UserDict): UserDict {
   if (!dictSize(over)) return base;
   if (!dictSize(base)) return over;
   return {
-    words: new Map([...base.words, ...over.words]),
-    morphemes: new Map([...base.morphemes, ...over.morphemes]),
+    segment: new Map([...base.segment, ...over.segment]),
+    whole: new Map([...base.whole, ...over.whole]),
   };
 }
 
@@ -49,22 +56,29 @@ export function applyChange(d: UserDict, change: Partial<DictChange>): UserDict 
   const remove = (change.remove ?? []).filter((r) => d[r.scope].has(r.key));
   const add = (change.add ?? []).filter((a) => d[a.scope].get(a.key) !== a.value || remove.some((r) => r.scope === a.scope && r.key === a.key));
   if (!remove.length && !add.length) return d;
-  const next = { words: new Map(d.words), morphemes: new Map(d.morphemes) };
+  const next = { segment: new Map(d.segment), whole: new Map(d.whole) };
   for (const r of remove) next[r.scope].delete(r.key);
   for (const a of add) next[a.scope].set(a.key, a.value);
   return next;
 }
 
-export function dictToJSON(d: UserDict): { words: Record<string, string>; morphemes: Record<string, string> } {
-  return { words: Object.fromEntries(d.words), morphemes: Object.fromEntries(d.morphemes) };
+export function dictToJSON(d: UserDict): { segment: Record<string, string>; whole: Record<string, string> } {
+  return { segment: Object.fromEntries(d.segment), whole: Object.fromEntries(d.whole) };
 }
 
-// 외부에서 온 값(저장소·파일·공유 URL) → 유효한 항목만 남긴 사전
+// 외부에서 온 값(저장소·파일·공유 URL) → 유효한 항목만 남긴 사전.
+// 2026-10 첫 배포 때의 키 이름(morphemes = 구간 일치, words = 전체 일치)도 읽는다
+const JSON_KEYS: [string, DictScope][] = [
+  ['morphemes', 'segment'],
+  ['words', 'whole'],
+  ['segment', 'segment'],
+  ['whole', 'whole'],
+];
 export function dictFromJSON(raw: unknown): UserDict {
-  const out = { words: new Map<string, string>(), morphemes: new Map<string, string>() };
+  const out = { segment: new Map<string, string>(), whole: new Map<string, string>() };
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
-  for (const scope of ['words', 'morphemes'] as const) {
-    const src = (raw as Record<string, unknown>)[scope];
+  for (const [field, scope] of JSON_KEYS) {
+    const src = (raw as Record<string, unknown>)[field];
     if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
     for (const [k, v] of Object.entries(src)) {
       if (typeof v !== 'string') continue;
@@ -78,17 +92,17 @@ export function dictFromJSON(raw: unknown): UserDict {
 
 // 텍스트 변환에 실제로 쓰이는 항목만 (공유 URL·백업에 넣어 같은 결과를 재현하기 위함)
 export function entriesUsedIn(text: string, dict: UserDict): UserDict {
-  const out = { words: new Map<string, string>(), morphemes: new Map<string, string>() };
+  const out = { segment: new Map<string, string>(), whole: new Map<string, string>() };
   if (!dictSize(dict)) return out;
   for (const run of yaleRunsIn(text)) {
-    const word = dict.words.get(run.key);
-    if (word !== undefined) {
-      out.words.set(run.key, word);
+    const whole = dict.whole.get(run.key);
+    if (whole !== undefined) {
+      out.whole.set(run.key, whole);
       continue;
     }
     run.segments.forEach((seg: string, i: number) => {
-      const value = run.vowel[i] ? dict.morphemes.get(seg) : undefined;
-      if (value !== undefined) out.morphemes.set(seg, value);
+      const value = run.vowel[i] ? dict.segment.get(seg) : undefined;
+      if (value !== undefined) out.segment.set(seg, value);
     });
   }
   return out;
@@ -96,15 +110,15 @@ export function entriesUsedIn(text: string, dict: UserDict): UserDict {
 
 type TokenInfo = NonNullable<ReturnType<typeof analyzeToken>>;
 
-// 이 토큰에 적용되고 있는 사전 항목 (어절 항목이 있으면 형태소 항목은 쓰이지 않는다)
+// 이 토큰에 적용되고 있는 사전 항목 (전체 일치 항목이 있으면 구간 일치 항목은 쓰이지 않는다)
 function hitsFor(info: TokenInfo, dict: UserDict | null | undefined): DictEntry[] {
   if (!dict) return [];
-  const word = dict.words.get(info.key);
-  if (word !== undefined) return [{ scope: 'words', key: info.key, value: word }];
+  const whole = dict.whole.get(info.key);
+  if (whole !== undefined) return [{ scope: 'whole', key: info.key, value: whole }];
   const out: DictEntry[] = [];
   info.segments.forEach((seg: string, i: number) => {
-    const value = info.vowel[i] ? dict.morphemes.get(seg) : undefined;
-    if (value !== undefined && !out.some((e) => e.key === seg)) out.push({ scope: 'morphemes', key: seg, value });
+    const value = info.vowel[i] ? dict.segment.get(seg) : undefined;
+    if (value !== undefined && !out.some((e) => e.key === seg)) out.push({ scope: 'segment', key: seg, value });
   });
   return out;
 }
@@ -116,9 +130,61 @@ function coreText(c: YaleCandidate, info: TokenInfo): string {
   return c.hangul.slice(start, Math.max(start, end));
 }
 
+// 후보 창에서 후보를 고르면 입력 칸에 넣을 값 — 구간별 출력을 '-'로 이은 형태
+export const candidateText = (c: YaleCandidate) => (c.parts ? c.parts.join('-') : c.hangul);
+
 const syllableCount = (s: string) => (s.match(/[가-힣]/g) || []).length;
 const sameParts = (a: readonly string[], b: readonly string[] | null | undefined) =>
   !!b && a.length === b.length && a.every((x, i) => x === b[i]);
+
+// 하이픈 없이 입력한 한글을 토큰의 구간에 맞춰 나눈다. 입력을 Yale로 바꾼 것이 토큰의 Yale과 같을 때만
+// (표준 Yale이면 aphu-n에 '아픈'을 넣어도 아프 | ㄴ). 음절 안에서는 받침 바로 앞에서만 나눈다
+function alignToSegments(text: string, info: TokenInfo, labial: boolean): string[] | null {
+  const bounds: number[] = [];
+  let acc = 0;
+  for (const seg of info.segments.slice(0, -1)) bounds.push((acc += seg.length));
+  const units: { ch: string; yale: string; open?: string; openYale?: string; coda?: string }[] = [];
+  for (const ch of text) {
+    if (isHangulSyllable(ch)) {
+      const idx = ch.codePointAt(0)! - SBase;
+      const t = idx % TCount;
+      const unit: (typeof units)[number] = { ch, yale: hangulToYale(ch, { labial }) };
+      if (t) {
+        unit.open = composeHangul(CHOSEONG[Math.floor(idx / NCount)], JUNGSEONG[Math.floor((idx % NCount) / TCount)], null);
+        unit.openYale = hangulToYale(unit.open!, { labial });
+        unit.coda = JONGSEONG[t];
+      }
+      units.push(unit);
+    } else if (Object.prototype.hasOwnProperty.call(J2Y, ch)) {
+      units.push({ ch, yale: (J2Y as Record<string, string>)[ch] }); // 자모로 쓴 형태소 (ㄴ 등)
+    } else if (/[a-zA-Z]/.test(ch)) {
+      units.push({ ch, yale: ch.toLowerCase() }); // 원문 그대로 둔 로마자 (John 등)
+    } else {
+      return null;
+    }
+  }
+  if (units.map((u) => u.yale).join('') !== info.segments.join('')) return null;
+  const parts = [''];
+  let pos = 0;
+  let b = 0;
+  for (const u of units) {
+    while (b < bounds.length && bounds[b] === pos) {
+      parts.push('');
+      b++;
+    }
+    const end = pos + u.yale.length;
+    if (b < bounds.length && bounds[b] < end) {
+      if (!u.open || pos + u.openYale!.length !== bounds[b]) return null;
+      parts[parts.length - 1] += u.open;
+      parts.push(u.coda!);
+      if (++b < bounds.length && bounds[b] < end) return null;
+    } else {
+      parts[parts.length - 1] += u.ch;
+    }
+    pos = end;
+  }
+  return b === bounds.length && parts.every(Boolean) ? parts : null;
+}
 
 // 고칠 수 있는 토큰인지 — Yale run이 정확히 1개이고 본체가 있을 때 (구두점만·숫자·복수 run은 아님)
 export const isEditableToken = (token: string) => !!analyzeToken(token);
@@ -134,22 +200,18 @@ export function describeToken(token: string, opts: ConvertOpts): TokenEditInfo |
     yale: token.slice(start, token.length - info.suffix.length - info.tail.length),
     prefill: cur.parts && cur.parts.length === info.segments.length ? cur.parts.join('-') : coreText(cur, info),
     hits: hitsFor(info, opts.dict),
-    segmented: info.segments.length > 1,
   };
 }
 
-// 고친 결과 → 사전 변경. value = 후보 창에서 고른 후보, 또는 직접 입력한 문자열(Yale 본체 부분의 한글).
+// 고친 결과(입력 칸의 한글) → 만들 수 있는 사전 변경과 기본 범위. 저장 전에 규칙을 보여 주고 고르게 하기 위함.
+// - 구간별 값: '-'로 나눈 수가 토큰의 구간 수와 같으면 그대로, 하이픈 없이 입력했으면 Yale로 맞춰 나눈다
+// - 구간 일치: 바뀐 부분마다 규칙 하나. 자음만의 부분을 바꿨거나 같은 부분에 다른 값을 주면 고를 수 없다
+// - 전체 일치: 언제나 고를 수 있다 (구간에 맞추지 못한 입력은 그 문자열 그대로)
+// - 기본값: 바뀐 부분이 모두 2음절 이상이거나 원래 변환되지 않던 부분(John 등)이면 구간 일치.
+//   1음절 부분은 표준 Yale의 다른 표기와 겹치기 쉬워 전체 일치 (khi(키)를 ki로 쓰는 문헌의 ki → 키를
+//   구간 일치로 기억하면 표준 Yale의 ki(기)까지 바뀐다)
 // - 엔진 결과(사전 없이)로 되돌린 것이면 이 토큰에 쓰인 항목을 지운다
-// - 구간별로 맞출 수 있고, 바뀐 구간이 모두 2음절 이상이거나 원래 변환되지 않던 구간(John 등)이면
-//   형태소 항목으로 — 다른 어절에서도 쓰인다. 1음절 형태소는 표준 Yale과 충돌하기 쉬워 어절 항목으로
-//   (khi(키)를 ki로 쓰는 문헌의 ki → 키를 형태소로 기억하면 표준 Yale의 ki(기)까지 바뀐다)
-// - 그 밖(구간 수가 다르게 입력, 자음 형태소를 바꿈 등)은 어절 항목
-// 바뀐 것이 없으면 null
-export function learnCorrection(
-  token: string,
-  value: string | YaleCandidate,
-  opts: ConvertOpts,
-): DictChange | null {
+export function planCorrection(token: string, value: string, opts: ConvertOpts): CorrectionPlan | null {
   const info = analyzeToken(token);
   if (!info) return null;
   const n = info.segments.length;
@@ -157,61 +219,75 @@ export function learnCorrection(
   const base = parseYaleWordCandidates(token, { ...opts, dict: null }, 1)[0];
   if (!cur || !base) return null;
   const hits = hitsFor(info, opts.dict);
-  const revert: DictChange | null = hits.length
-    ? { add: [], remove: hits.map(({ scope, key }) => ({ scope, key })) }
-    : null;
+  const plan = (kind: CorrectionPlan['kind'], extra: Partial<CorrectionPlan> = {}): CorrectionPlan => ({
+    kind,
+    revert: null,
+    segment: null,
+    whole: null,
+    defaultScope: 'whole',
+    segmentBlocked: null,
+    shortSegment: false,
+    ...extra,
+  });
 
-  let parts: string[];
-  if (typeof value === 'string') {
-    let text = normalizeValue(value);
-    // 입력 칸에는 Yale 본체 부분만 들어 있지만, 토큰 앞뒤의 구두점·'-'까지 쳐 넣었으면 떼어 낸다
-    // (그대로 두면 출력에서 '그러므로,,'처럼 겹친다)
-    const head = info.prefix + info.lead;
-    const foot = info.tail + info.suffix;
-    if (head && text.startsWith(head)) text = text.slice(head.length);
-    if (foot && text.endsWith(foot) && text.length > foot.length) text = text.slice(0, -foot.length);
-    if (!isValidValue(text)) return null;
-    const split = text.split('-');
-    if (split.length !== n || split.some((p) => !p)) {
-      if (text === coreText(cur, info)) return null;
-      if (text === coreText(base, info)) return revert;
-      return { add: [{ scope: 'words', key: info.key, value: text }], remove: [] };
-    }
-    parts = split;
-  } else {
-    if (!value.parts || value.parts.length !== n) return null;
-    parts = [...value.parts];
+  let text = normalizeValue(value);
+  // 입력 칸에는 Yale 본체 부분만 들어 있지만, 토큰 앞뒤의 구두점·'-'까지 쳐 넣었으면 떼어 낸다
+  // (그대로 두면 출력에서 '그러므로,,'처럼 겹친다)
+  const head = info.prefix + info.lead;
+  const foot = info.tail + info.suffix;
+  if (head && text.startsWith(head)) text = text.slice(head.length);
+  if (foot && text.endsWith(foot) && text.length > foot.length) text = text.slice(0, -foot.length);
+  if (!isValidValue(text)) return null;
+
+  const split = text.split('-');
+  const parts =
+    split.length === n && split.every(Boolean)
+      ? split
+      : text.includes('-')
+        ? null
+        : alignToSegments(text, info, opts.labial);
+
+  if (parts ? sameParts(parts, cur.parts) : text === coreText(cur, info)) return plan('none');
+  if (parts ? sameParts(parts, base.parts) : text === coreText(base, info)) {
+    return hits.length
+      ? plan('revert', { revert: { add: [], remove: hits.map(({ scope, key }) => ({ scope, key })) } })
+      : plan('none');
   }
 
-  if (sameParts(parts, cur.parts)) return null;
-  if (sameParts(parts, base.parts)) return revert;
-
+  const whole: DictChange = { add: [{ scope: 'whole', key: info.key, value: parts ? parts.join('-') : text }], remove: [] };
   const baseParts = base.parts && base.parts.length === n ? base.parts : null;
-  if (baseParts) {
-    const diff = parts.flatMap((p, i) => (p !== baseParts[i] ? [i] : []));
-    const values = new Map<string, string>();
-    const byMorpheme = diff.every((i) => {
-      const seg = info.segments[i];
-      const ok = info.vowel[i]
-        && (syllableCount(parts[i]) >= 2 || baseParts[i].toLowerCase() === seg)
-        && (values.get(seg) ?? parts[i]) === parts[i]; // 같은 형태소에 다른 값을 주면 어절 항목으로
-      values.set(seg, parts[i]);
-      return ok;
-    });
-    // 같은 형태소가 이 토큰의 다른 자리에 원래대로 남아 있으면 형태소 항목이 그 자리까지 바꾸므로 어절 항목으로
-    if (byMorpheme && parts.every((p, i) => (values.get(info.segments[i]) ?? p) === p)) {
-      const add = [...values].map(([key, v]): DictEntry => ({ scope: 'morphemes', key, value: v }));
-      // 이 토큰에서 엔진 결과로 되돌린 형태소 항목, 형태소 항목을 가리는 어절 항목은 지운다
-      const remove = hits
-        .filter((h) => h.scope === 'words' || !values.has(h.key))
-        .map(({ scope, key }) => ({ scope, key }));
-      return { add, remove };
-    }
+  if (!parts || !baseParts) return plan('rule', { whole, segmentBlocked: 'unaligned' });
+
+  const diff = parts.flatMap((p, i) => (p !== baseParts[i] ? [i] : []));
+  const values = new Map<string, string>();
+  const consistent = diff.every((i) => {
+    const seg = info.segments[i];
+    const ok = info.vowel[i] && (values.get(seg) ?? parts[i]) === parts[i];
+    values.set(seg, parts[i]);
+    return ok;
+  });
+  // 같은 부분이 이 토큰의 다른 자리에 원래대로 남아 있으면 구간 일치 규칙이 그 자리까지 바꾸므로 고를 수 없다
+  if (!consistent || !parts.every((p, i) => (values.get(info.segments[i]) ?? p) === p)) {
+    return plan('rule', { whole, segmentBlocked: 'mixed' });
   }
-  return { add: [{ scope: 'words', key: info.key, value: parts.join('-') }], remove: [] };
+  const segment: DictChange = {
+    add: [...values].map(([key, v]): DictEntry => ({ scope: 'segment', key, value: v })),
+    // 이 토큰에서 엔진 결과로 되돌린 구간 일치 항목, 구간 일치 항목을 가리는 전체 일치 항목은 지운다
+    remove: hits.filter((h) => h.scope === 'whole' || !values.has(h.key)).map(({ scope, key }) => ({ scope, key })),
+  };
+  const long = diff.every((i) => syllableCount(parts[i]) >= 2 || baseParts[i].toLowerCase() === info.segments[i]);
+  return plan('rule', { segment, whole, defaultScope: long ? 'segment' : 'whole', shortSegment: !long });
 }
 
-// 토스트용 요약: "mali → 마리, aphu-n → 아프-ㄴ"
+// 기본 범위로 바로 고칠 때의 사전 변경 (바뀐 것이 없으면 null)
+export function learnCorrection(token: string, value: string, opts: ConvertOpts): DictChange | null {
+  const p = planCorrection(token, value, opts);
+  if (!p || p.kind === 'none') return null;
+  if (p.kind === 'revert') return p.revert;
+  return (p.defaultScope === 'segment' ? p.segment : p.whole) ?? p.whole;
+}
+
+// 토스트·미리보기용 요약: "mali → 마리, aphu-n → 아프-ㄴ"
 export function summarizeEntries(entries: { key: string; value?: string }[]): string {
   return entries.map((e) => (e.value === undefined ? e.key : `${e.key} → ${e.value}`)).join(', ');
 }

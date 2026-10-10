@@ -38,10 +38,15 @@ describe('sanitizeShareState', () => {
     assert.equal('h' in sanitizeShareState({}), false);
   });
 
-  test('사용자 사전 항목 u는 문자열 값만, 비면 생략', () => {
-    const s = sanitizeShareState({ u: { w: { 'ki-ka': '키-가', x: 1 }, m: 'bad' } });
+  test('사용자 사전 항목 u는 문자열 값만, 비면 생략 (s = 구간 일치, w = 전체 일치)', () => {
+    const s = sanitizeShareState({ u: { w: { 'ki-ka': '키-가', x: 1 }, s: 'bad' } });
     assert.deepEqual(s.u, { w: { 'ki-ka': '키-가' } });
     assert.equal('u' in sanitizeShareState({ u: { w: { x: 1 } } }), false);
     assert.equal('u' in sanitizeShareState({ u: [] }), false);
+  });
+
+  test('첫 배포 때 링크의 m(구간 일치의 옛 이름)은 s로', () => {
+    assert.deepEqual(sanitizeShareState({ u: { m: { mali: '마리' } } }).u, { s: { mali: '마리' } });
+    assert.deepEqual(sanitizeShareState({ u: { m: { mali: '마리' }, s: { mali: '머리' } } }).u, { s: { mali: '머리' } });
   });
 });

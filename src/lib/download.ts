@@ -40,7 +40,7 @@ export interface BackupArgs {
   wordOverrides: ReadonlyMap<string, string>;
   glosses: Record<string, string[]>; // 캡처 시점 필터 결과 (collectShareGlosses)
   // 입력 변환에 쓰인 사용자 사전 항목 (entriesUsedIn → dictToJSON)
-  userDictionary: { words: Record<string, string>; morphemes: Record<string, string> };
+  userDictionary: { segment: Record<string, string>; whole: Record<string, string> };
   shareUrl: string;
 }
 
@@ -73,13 +73,14 @@ export function buildBackup(args: BackupArgs) {
 }
 
 // 사용자 사전 내보내기 파일 — 다른 브라우저·PC에서 '가져오기'로 읽는다
-export function buildDictionaryExport(dict: { words: Record<string, string>; morphemes: Record<string, string> }) {
+// segment = 구간 일치, whole = 전체 일치 (version 1의 morphemes·words도 가져오기에서 읽는다)
+export function buildDictionaryExport(dict: { segment: Record<string, string>; whole: Record<string, string> }) {
   return {
-    version: 1,
+    version: 2,
     tool: 'Hangul ↔ Yale Romanizer',
     type: 'user-dictionary',
     exportedAt: new Date().toISOString(),
-    words: dict.words,
-    morphemes: dict.morphemes,
+    segment: dict.segment,
+    whole: dict.whole,
   };
 }

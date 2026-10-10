@@ -97,7 +97,8 @@ export function writeKeepHyphens(on: boolean): void {
 }
 
 // ===== 사용자 사전 (2026-10) =====
-// 저장 형식 {v: 1, words: {...}, morphemes: {...}}. 형식 검증·Map 변환은 user-dict.ts(dictFromJSON)가 맡는다
+// 저장 형식 {v: 2, segment: {...}, whole: {...}} — 형식 검증·Map 변환, 첫 배포 때의 v1(words·morphemes) 읽기는
+// user-dict.ts(dictFromJSON)가 맡는다. 다음 저장 때 v2로 바뀐다
 export function readUserDictRaw(): unknown {
   try {
     return JSON.parse(getItem(KEYS.userDict) || 'null');
@@ -106,8 +107,8 @@ export function readUserDictRaw(): unknown {
   }
 }
 
-export function writeUserDictRaw(data: { words: Record<string, string>; morphemes: Record<string, string> }): boolean {
-  return setItem(KEYS.userDict, JSON.stringify({ v: 1, ...data }));
+export function writeUserDictRaw(data: { segment: Record<string, string>; whole: Record<string, string> }): boolean {
+  return setItem(KEYS.userDict, JSON.stringify({ v: 2, ...data }));
 }
 
 // 후보 창의 '사전에 기억' 체크 — 기본 ON. 끄면 고친 내용은 이번 세션에만 적용

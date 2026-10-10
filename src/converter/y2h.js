@@ -136,7 +136,7 @@ export function yaleRunsIn(text) {
 
 // Yale → 한글 메인 진입점. 줄/공백/구두점은 그대로 보존.
 // opts: { labial = true, keepHyphens = false, dict = null } — keepHyphens면 어절 내부 '-'(형태소 경계)를
-// 출력에 남긴다. dict는 사용자 사전 { words: Map, morphemes: Map } (src/lib/user-dict.ts)
+// 출력에 남긴다. dict는 사용자 사전 { segment: Map, whole: Map } (src/lib/user-dict.ts)
 export function reverseConvert(text, opts = {}) {
   if (!text || !text.trim()) return '';
   return text.replace(YALE_RUN, (run, offset) =>
@@ -198,8 +198,8 @@ function rankRun(run, { labial = true, keepHyphens = false, dict = null } = {}, 
   if (core) {
     const pieces = core.split(/([.\-]+)/); // 짝수 인덱스 = 구간, 홀수 인덱스 = 경계 기호
     const lastIdx = pieces.length - 1;
-    // 사전의 어절 항목: '-'로 나눈 값이 구간 수와 맞으면 구간별 강제값, 아니면 값 문자열 그대로
-    const wordValue = dict?.words?.get(core.toLowerCase());
+    // 사전의 전체 일치 항목: '-'로 나눈 값이 구간 수와 맞으면 구간별 강제값, 아니면 값 문자열 그대로
+    const wordValue = dict?.whole?.get(core.toLowerCase());
     const forced = wordValue === undefined ? null : wordValue.split('-');
     if (forced && forced.length !== lastIdx / 2 + 1) {
       result = [{ hangul: lead + wordValue + tail, score: 0, parts: null, dict: true }];
@@ -216,7 +216,7 @@ function rankRun(run, { labial = true, keepHyphens = false, dict = null } = {}, 
         const sepOut = (prevRaw, curRaw) =>
           ellipsis || prevRaw || curRaw ? sep : keepHyphens ? sep.replace(/\./g, '') : '';
         if (/[aeiou]/.test(seg)) {
-          let forcedPart = forced ? forced[i / 2] : dict?.morphemes?.get(seg);
+          let forcedPart = forced ? forced[i / 2] : dict?.segment?.get(seg);
           const foreign = forcedPart === undefined && isForeignSegment(raw);
           // 받침 자음으로 시작하는 어미 표기(sa-nta → 사-ㄴ다·산다, ka-lkka → 가-ㄹ까·갈까): 그 자음은
           // 자음만의 구간과 같은 규칙(앞 음절 받침에 결합, keepHyphens에서 '-' 뒤면 자모)으로, 나머지만 음절 변환

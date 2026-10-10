@@ -62,16 +62,17 @@ export function sanitizeShareState(raw: unknown): ShareState | null {
     out.g = g;
   }
   if (r.h) out.h = true;
-  // 사용자 사전 항목 — 문자열 값만 (키·값의 Yale/한글 형식 검증은 dictFromJSON이 적용 시점에)
+  // 사용자 사전 항목 (s = 구간 일치, w = 전체 일치) — 문자열 값만. 키·값의 Yale/한글 형식 검증은 dictFromJSON이
+  // 적용 시점에. 첫 배포 때 링크의 m(구간 일치의 옛 이름)은 s로 옮긴다
   if (isRecord(r.u)) {
     const strings = (v: unknown) =>
       isRecord(v) ? (Object.fromEntries(Object.entries(v).filter(([, x]) => typeof x === 'string')) as Record<string, string>) : {};
+    const s = { ...strings(r.u.m), ...strings(r.u.s) };
     const w = strings(r.u.w);
-    const m = strings(r.u.m);
-    if (Object.keys(w).length || Object.keys(m).length) {
+    if (Object.keys(s).length || Object.keys(w).length) {
       out.u = {};
+      if (Object.keys(s).length) out.u.s = s;
       if (Object.keys(w).length) out.u.w = w;
-      if (Object.keys(m).length) out.u.m = m;
     }
   }
   return out;

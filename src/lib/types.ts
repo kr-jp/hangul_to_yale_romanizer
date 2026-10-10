@@ -5,12 +5,13 @@ export type OutputFormat = 'plain' | 'gloss' | 'latex' | 'markdown';
 export type Lang = 'ja' | 'ko';
 export type Theme = 'light' | 'dark';
 
-// 사용자 사전 (src/lib/user-dict.ts). 키는 소문자 Yale
-// words = 어절의 Yale 부분 전체가 일치할 때, morphemes = '-'·'.'로 나뉜 구간 하나가 일치할 때
-export type DictScope = 'words' | 'morphemes';
+// 사용자 사전 (src/lib/user-dict.ts). 형태소 분석이 아니라 입력 표기(띄어쓰기·하이픈)를 단위로 한 치환 규칙.
+// 키는 소문자 Yale. segment(구간 일치) = '-'·'.'로 나뉜 부분 하나가 키와 같을 때 (어디에 나오든),
+// whole(전체 일치) = 띄어쓰기로 나뉜 표기의 Yale 부분 전체가 키와 같을 때만
+export type DictScope = 'segment' | 'whole';
 export interface UserDict {
-  readonly words: ReadonlyMap<string, string>;
-  readonly morphemes: ReadonlyMap<string, string>;
+  readonly segment: ReadonlyMap<string, string>;
+  readonly whole: ReadonlyMap<string, string>;
 }
 
 export interface DictEntry {
@@ -28,15 +29,26 @@ export interface DictChange {
 // 후보 창이 열릴 때 필요한 토큰 정보 (user-dict.ts describeToken)
 export interface TokenEditInfo {
   yale: string; // 토큰의 Yale 본체 (원래 대소문자)
-  prefill: string; // 직접 입력 칸의 초기값 — 구간이 여럿이면 '-'로 나눈 형태 (형태소 단위로 고칠 수 있게)
+  prefill: string; // 직접 입력 칸의 초기값 — 구간이 여럿이면 '-'로 나눈 형태
   hits: DictEntry[]; // 이 토큰에 쓰이고 있는 사전 항목
-  segmented: boolean;
+}
+
+// 고친 결과로 만들 수 있는 사전 변경 (user-dict.ts planCorrection). 저장 전에 규칙을 보여 주고 범위를 고르게 한다
+export interface CorrectionPlan {
+  kind: 'none' | 'revert' | 'rule'; // 바뀐 것 없음 / 엔진 결과로 되돌림(쓰인 항목 삭제) / 새 규칙
+  revert: DictChange | null;
+  segment: DictChange | null; // 구간 일치로 기억할 때 — 구간에 맞출 수 없으면 null
+  whole: DictChange | null; // 전체 일치로 기억할 때
+  defaultScope: DictScope;
+  segmentBlocked: 'unaligned' | 'mixed' | null; // 구간 일치를 고를 수 없는 이유 (입력을 구간에 맞출 수 없음 / 그 밖)
+  shortSegment: boolean; // 구간 일치도 되지만 1음절 부분이라 기본값을 전체 일치로 둔 경우
 }
 
 // 인터리니어의 어절 편집 창이 App에 요청하는 동작 (참조가 고정된 객체로 전달)
 export interface WordEditor {
   describe(token: string): TokenEditInfo | null;
-  correct(token: string, value: string | YaleCandidate, remember: boolean): void;
+  plan(token: string, text: string): CorrectionPlan | null;
+  apply(change: DictChange, remember: boolean): void;
   remove(entry: { scope: DictScope; key: string }): void;
 }
 
@@ -94,6 +106,7 @@ export interface ShareState {
   ge?: boolean; // glossEnabled. false면 생략
   g?: Record<string, string[]>; // 글로스 (줄 텍스트 → 셀 배열). 비면 생략
   h?: boolean; // keepHyphens (y2h 형태소 경계 '-' 표시). false면 생략
-  // 입력에 쓰인 사용자 사전 항목 (w = 어절, m = 형태소). 받는 쪽에서는 이번 세션에만 적용. 없으면 생략
-  u?: { w?: Record<string, string>; m?: Record<string, string> };
+  // 입력에 쓰인 사용자 사전 항목 (s = 구간 일치, w = 전체 일치). 받는 쪽에서는 이번 세션에만 적용. 없으면 생략.
+  // 2026-10 초기 링크의 m(구간 일치의 옛 이름)은 sanitizeShareState가 s로 옮긴다
+  u?: { s?: Record<string, string>; w?: Record<string, string> };
 }

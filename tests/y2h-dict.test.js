@@ -1,7 +1,7 @@
 // 사용자 사전(opts.dict)·영어 이름·공범주 표기 테스트 (2026-10)
 // - Yale에 없는 글자가 든 구간(John)·대문자 약어(IP)는 원문 그대로, 옆의 하이픈도 남긴다
 // - 숫자가 붙은 단독 e(공범주 e₁)는 그대로, 하이픈 뒤 자음 형태소의 숫자는 지표(-n1 → -ㄴ1)
-// - 사전: 형태소 항목은 다른 어절 안에서도, 어절 항목은 어절 전체가 같을 때만. 사전별 캐시 분리
+// - 사전: 구간 일치 항목은 '-'로 나뉜 부분이 같으면 어디서든, 전체 일치 항목은 표기 전체가 같을 때만. 사전별 캐시 분리
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -12,9 +12,9 @@ import {
 } from '../src/converter/y2h.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dict = (words = {}, morphemes = {}) => ({
-  words: new Map(Object.entries(words)),
-  morphemes: new Map(Object.entries(morphemes)),
+const dict = (whole = {}, segment = {}) => ({
+  segment: new Map(Object.entries(segment)),
+  whole: new Map(Object.entries(whole)),
 });
 
 describe('영어 이름·약어는 원문 그대로', () => {
@@ -67,33 +67,33 @@ describe('사용자 사전 (빈도 데이터 주입)', () => {
   });
   after(() => setFrequencyData({}));
 
-  test('형태소 항목은 다른 어절 안에서도 쓰인다', () => {
+  test('구간 일치 항목은 다른 표기 안에서도 쓰인다', () => {
     const d = dict({}, { tuli: '드리' }); // 엔진 1위는 들이
     assert.equal(reverseConvert('tuli-ess-ta tuli-ko', { dict: d }), '드리었다 드리고');
     assert.equal(reverseConvert('tuli-ess-ta', { dict: d, keepHyphens: true }), '드리-었-다');
     assert.equal(reverseConvert('tuli', { dict: d }), '드리');
   });
 
-  test('어절 항목(구간별 값): 종성 결합·하이픈 표시는 평소대로', () => {
+  test('전체 일치 항목(구간별 값): 종성 결합·하이픈 표시는 평소대로', () => {
     const d = dict({ 'aphu-n': '아프-ㄴ' }); // 엔진 1위는 앞은
     assert.equal(reverseConvert('aphu-n', { dict: d }), '아픈');
     assert.equal(reverseConvert('aphu-n', { dict: d, keepHyphens: true }), '아프-ㄴ');
     assert.equal(reverseConvert('(aphu-n)', { dict: d }), '(아픈)');
   });
 
-  test('어절 항목(구간 수가 다른 값): 값 그대로', () => {
+  test('전체 일치 항목(구간 수가 다른 값): 값 그대로', () => {
     const d = dict({ 'aphu-n': '아픈' });
     assert.equal(reverseConvert('aphu-n', { dict: d, keepHyphens: true }), '아픈');
   });
 
-  test('어절 항목은 어절 전체가 같을 때만', () => {
-    // 문헌 고유 표기: 네(표준 Yale은 ney)를 ne로 쓰는 경우. 표준 Yale의 ne(너)가 든 형태소에는 영향 없음
+  test('전체 일치 항목은 표기 전체가 같을 때만', () => {
+    // 문헌 고유 표기: 네(표준 Yale은 ney)를 ne로 쓰는 경우. 표준 Yale의 ne(너)가 든 다른 표기에는 영향 없음
     const d = dict({ ne: '네' });
     assert.equal(reverseConvert('ne kes', { dict: d }), '네 것');
     assert.equal(reverseConvert('ne-nun', { dict: d }), '너는');
   });
 
-  test('어절 항목이 형태소 항목보다 우선', () => {
+  test('전체 일치 항목이 구간 일치 항목보다 우선', () => {
     const d = dict({ 'mali-nun': '머리-는' }, { mali: '마리' });
     assert.equal(reverseConvert('Mali-nun Mali-ka', { dict: d }), '머리는 마리가');
   });
@@ -104,7 +104,7 @@ describe('사용자 사전 (빈도 데이터 주입)', () => {
     assert.equal(reverseConvert('-mali-', { dict: d }), '-마리-');
   });
 
-  test('영어 이름에도 형태소 항목을 줄 수 있다', () => {
+  test('영어 이름에도 구간 일치 항목을 줄 수 있다', () => {
     assert.equal(reverseConvert('John-un', { dict: dict({}, { john: '존' }) }), '존은');
   });
 
@@ -138,7 +138,7 @@ describe('후보의 구간별 출력(parts)·사전 표시 (빈도 데이터 주
     assert.equal(parseYaleWordCandidates('Mali-nun')[0].dict, false);
   });
 
-  test('값 그대로 쓰는 어절 항목은 parts 없음', () => {
+  test('값 그대로 쓰는 전체 일치 항목은 parts 없음', () => {
     const [c] = parseYaleWordCandidates('aphu-n,', { dict: dict({ 'aphu-n': '아픈' }) });
     assert.deepEqual([c.hangul, c.parts, c.dict], ['아픈,', null, true]);
   });

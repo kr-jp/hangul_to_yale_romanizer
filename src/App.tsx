@@ -40,8 +40,8 @@ import {
   dictSize,
   dictToJSON,
   entriesUsedIn,
-  learnCorrection,
   mergeDicts,
+  planCorrection,
   summarizeEntries,
 } from './lib/user-dict';
 import type {
@@ -185,7 +185,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         tabCopy: state.tabCopy, // 공유 대상 아님 — 방문자 설정 유지
         keepHyphens: !!s.h,
         wordOverrides: overrides,
-        sessionDict: s.u ? dictFromJSON({ words: s.u.w, morphemes: s.u.m }) : EMPTY_DICT,
+        sessionDict: s.u ? dictFromJSON({ segment: s.u.s, whole: s.u.w }) : EMPTY_DICT,
         glossEnabled: !!s.ge,
         glosses,
       };
@@ -196,8 +196,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
 // 사전의 모든 키 (세션 항목 지우기용)
 function allKeys(d: UserDict): { scope: DictScope; key: string }[] {
   return [
-    ...[...d.words.keys()].map((key) => ({ scope: 'words' as const, key })),
-    ...[...d.morphemes.keys()].map((key) => ({ scope: 'morphemes' as const, key })),
+    ...[...d.segment.keys()].map((key) => ({ scope: 'segment' as const, key })),
+    ...[...d.whole.keys()].map((key) => ({ scope: 'whole' as const, key })),
   ];
 }
 
@@ -353,10 +353,10 @@ export default function App() {
     if (state.keepHyphens) share.h = true;
     // 받는 사람에게는 사전이 없으므로 이 입력에 쓰인 항목만 함께 보낸다
     const used = usedDictJSON();
-    if (Object.keys(used.words).length || Object.keys(used.morphemes).length) {
+    if (Object.keys(used.segment).length || Object.keys(used.whole).length) {
       share.u = {};
-      if (Object.keys(used.words).length) share.u.w = used.words;
-      if (Object.keys(used.morphemes).length) share.u.m = used.morphemes;
+      if (Object.keys(used.segment).length) share.u.s = used.segment;
+      if (Object.keys(used.whole).length) share.u.w = used.whole;
     }
     return share;
   };
@@ -447,18 +447,22 @@ export default function App() {
       dispatch({ type: 'CHANGE_SESSION_DICT', change });
     }
     const tr = tRef.current;
+    // 범위가 하나뿐이면 알림에 표시 (구간 일치 / 전체 일치)
+    const scopes = [...new Set(change.add.map((e) => e.scope))];
+    const scopeNote =
+      scopes.length === 1
+        ? tr('dictScopeParen').replace('{s}', tr(scopes[0] === 'segment' ? 'dictScopeSegment' : 'dictScopeWhole'))
+        : '';
     const message = change.add.length
-      ? tr(remember ? 'dictSaved' : 'dictSessionOnly').replace('{e}', summarizeEntries(change.add))
+      ? tr(remember ? 'dictSaved' : 'dictSessionOnly').replace('{s}', scopeNote).replace('{e}', summarizeEntries(change.add))
       : tr('dictRemoved').replace('{e}', summarizeEntries(change.remove));
     toast(message, { duration: 3000 });
   }, []);
   const wordEditor = useMemo<WordEditor>(
     () => ({
       describe: (token) => describeToken(token, optsRef.current),
-      correct: (token, value, remember) => {
-        const change = learnCorrection(token, value, optsRef.current);
-        if (change) applyDictChange(change, remember);
-      },
+      plan: (token, text) => planCorrection(token, text, optsRef.current),
+      apply: applyDictChange,
       remove: (entry) => applyDictChange({ add: [], remove: [entry] }, true),
     }),
     [applyDictChange],

@@ -39,7 +39,7 @@ let lastDict: UserDict | null = null;
 let lastDictKey = '';
 function stableDict(dict: UserDict | null | undefined): UserDict | null {
   if (!dict) return null;
-  const key = JSON.stringify([[...dict.words], [...dict.morphemes]]);
+  const key = JSON.stringify([[...dict.segment], [...dict.whole]]);
   if (key !== lastDictKey) {
     lastDictKey = key;
     lastDict = dict;

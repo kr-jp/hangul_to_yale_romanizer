@@ -7,6 +7,7 @@ import { Sheet, SheetCloseButton, SheetContent, SheetHeader, SheetTitle } from '
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
 import { useI18n } from '@/hooks/useI18n';
 import {
   dictFromJSON,
@@ -48,7 +49,7 @@ export default function DictionaryDrawer({
   const [query, setQuery] = useState('');
   const [yale, setYale] = useState('');
   const [hangul, setHangul] = useState('');
-  const [wordOnly, setWordOnly] = useState(false);
+  const [scopeChoice, setScopeChoice] = useState<DictScope>('segment');
   const [error, setError] = useState<'yale' | 'hangul' | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
   const confirmTimer = useRef<number | undefined>(undefined);
@@ -66,11 +67,14 @@ export default function DictionaryDrawer({
   const filtered = q ? entries.filter((e) => e.key.includes(q) || e.value.toLowerCase().includes(q)) : entries;
   const total = entries.length + sessionEntries.length;
 
+  // 키 안에 '-'·'.'가 있으면 구간 하나가 아니므로 전체 일치만
+  const keyHasSeparator = /[.-]/.test(normalizeKey(yale));
+  const addScope: DictScope = keyHasSeparator ? 'whole' : scopeChoice;
+
   const handleAdd = (e: FormEvent) => {
     e.preventDefault();
     const key = normalizeKey(yale);
-    // 내부에 '-'·'.'가 있으면 어절 항목으로만 쓸 수 있다
-    const scope: DictScope = wordOnly || /[.-]/.test(key) ? 'words' : 'morphemes';
+    const scope = addScope;
     const value = normalizeValue(hangul);
     if (!isValidKey(scope, key)) return setError('yale');
     if (!isValidValue(value)) return setError('hangul');
@@ -105,7 +109,7 @@ export default function DictionaryDrawer({
     }
   };
 
-  const scopeLabel = (scope: DictScope) => t(scope === 'words' ? 'dictScopeWords' : 'dictScopeMorphemes');
+  const scopeLabel = (scope: DictScope) => t(scope === 'whole' ? 'dictScopeWhole' : 'dictScopeSegment');
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -153,19 +157,26 @@ export default function DictionaryDrawer({
               />
             </div>
             <div className="flex items-center justify-between gap-2">
-              <label className="flex cursor-pointer items-center gap-1.5 text-xs">
-                <input
-                  type="checkbox"
-                  checked={wordOnly}
-                  onChange={(e) => setWordOnly(e.target.checked)}
-                  className="size-3.5 accent-primary"
-                />
-                {t('dictWordOnly')}
-              </label>
+              <ToggleGroup
+                type="single"
+                value={addScope}
+                onValueChange={(v) => v && setScopeChoice(v as DictScope)}
+                aria-label={t('dictScopeLabel')}
+              >
+                <ToggleGroupItem value="segment" disabled={keyHasSeparator} className="h-7 px-2.5 text-xs">
+                  {t('dictScopeSegment')}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="whole" className="h-7 px-2.5 text-xs">
+                  {t('dictScopeWhole')}
+                </ToggleGroupItem>
+              </ToggleGroup>
               <Button type="submit" size="sm">
                 {t('dictAdd')}
               </Button>
             </div>
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              {t(addScope === 'segment' ? 'dictScopeSegmentDesc' : 'dictScopeWholeDesc')}
+            </p>
             {error && (
               <p className="text-xs text-destructive">{t(error === 'yale' ? 'dictInvalidYale' : 'dictInvalidHangul')}</p>
             )}
