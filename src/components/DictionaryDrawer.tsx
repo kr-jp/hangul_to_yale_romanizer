@@ -8,6 +8,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
+import ScopeDescription from './ScopeDescription';
 import { useI18n } from '@/hooks/useI18n';
 import {
   dictFromJSON,
@@ -68,12 +69,13 @@ export default function DictionaryDrawer({
   const total = entries.length + sessionEntries.length;
 
   // 키 안에 '-'·'.'가 있으면 구간 하나가 아니므로 전체 일치만
-  const keyHasSeparator = /[.-]/.test(normalizeKey(yale));
+  const typedKey = normalizeKey(yale);
+  const keyHasSeparator = /[.-]/.test(typedKey);
   const addScope: DictScope = keyHasSeparator ? 'whole' : scopeChoice;
 
   const handleAdd = (e: FormEvent) => {
     e.preventDefault();
-    const key = normalizeKey(yale);
+    const key = typedKey;
     const scope = addScope;
     const value = normalizeValue(hangul);
     if (!isValidKey(scope, key)) return setError('yale');
@@ -174,9 +176,7 @@ export default function DictionaryDrawer({
                 {t('dictAdd')}
               </Button>
             </div>
-            <p className="text-[11px] leading-snug text-muted-foreground">
-              {t(addScope === 'segment' ? 'dictScopeSegmentDesc' : 'dictScopeWholeDesc')}
-            </p>
+            <ScopeDescription scope={addScope} keys={isValidKey(addScope, typedKey) ? [typedKey] : []} />
             {error && (
               <p className="text-xs text-destructive">{t(error === 'yale' ? 'dictInvalidYale' : 'dictInvalidHangul')}</p>
             )}

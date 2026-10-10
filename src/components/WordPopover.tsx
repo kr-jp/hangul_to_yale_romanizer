@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group';
+import ScopeDescription from './ScopeDescription';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { readDictRemember, writeDictRemember } from '@/lib/storage';
@@ -297,9 +298,7 @@ function RulePreview({
         </ToggleGroup>
       </div>
       <RuleLines entries={change.add} />
-      <p className="text-[11px] leading-snug text-muted-foreground">
-        {t(scope === 'segment' ? 'dictScopeSegmentDesc' : 'dictScopeWholeDesc')}
-      </p>
+      <ScopeDescription scope={scope} keys={change.add.map((e) => e.key)} />
       {change.remove.length > 0 && (
         <p className="text-[11px] leading-snug text-muted-foreground">
           {t('editRuleRemoves')} <span className="font-mono">{change.remove.map((r) => r.key).join(', ')}</span>

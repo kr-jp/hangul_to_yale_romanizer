@@ -5,9 +5,9 @@ export type OutputFormat = 'plain' | 'gloss' | 'latex' | 'markdown';
 export type Lang = 'ja' | 'ko';
 export type Theme = 'light' | 'dark';
 
-// 사용자 사전 (src/lib/user-dict.ts). 형태소 분석이 아니라 입력 표기(띄어쓰기·하이픈)를 단위로 한 치환 규칙.
-// 키는 소문자 Yale. segment(구간 일치) = '-'·'.'로 나뉜 부분 하나가 키와 같을 때 (어디에 나오든),
-// whole(전체 일치) = 띄어쓰기로 나뉜 표기의 Yale 부분 전체가 키와 같을 때만
+// 사용자 사전 (src/lib/user-dict.ts). 형태소 분석 없이 Yale 원문의 표기와 글자 그대로 대조하는 치환 규칙.
+// 키는 소문자 Yale. segment(구간 일치) = '-'·'.'로 나뉜 부분 하나가 키와 같을 때 (더 긴 표기 안에서도),
+// whole(전체 일치) = 표기 본체(Yale 글자와 '-'·'.'의 연속에서 앞뒤 '-'·'.'를 뗀 것) 전체가 키와 같을 때만
 export type DictScope = 'segment' | 'whole';
 export interface UserDict {
   readonly segment: ReadonlyMap<string, string>;
