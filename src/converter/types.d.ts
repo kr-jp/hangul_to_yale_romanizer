@@ -5,10 +5,12 @@ declare module '*/converter/h2y.js' {
 }
 
 declare module '*/converter/y2h.js' {
-  export function reverseConvert(text: string, opts?: { labial?: boolean }): string;
+  // keepHyphens: 어절 내부 '-'(형태소 경계)를 한글 출력에 남김 (기본 false)
+  type Y2HOpts = { labial?: boolean; keepHyphens?: boolean };
+  export function reverseConvert(text: string, opts?: Y2HOpts): string;
   export function parseYaleWordCandidates(
     word: string,
-    opts?: { labial?: boolean },
+    opts?: Y2HOpts,
     k?: number,
   ): Array<{ hangul: string; score: number }>;
   export function setFrequencyData(d: {

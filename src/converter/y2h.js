@@ -30,11 +30,17 @@ let syllableFreq = null;
 let bigramFreq = null;
 let wordFreq = null;
 
+// run 단위 후보 캐시 — 같은 어절의 반복·타이핑 중 재계산을 피한다 (대량 입력 성능).
+// 결과가 빈도 데이터·옵션에 따라 달라지므로 키에 옵션을 넣고, 데이터 주입 시 비운다
+const runCache = new Map();
+const RUN_CACHE_MAX = 50000;
+
 // UI 레이어가 fetch 후 호출. {syllable, bigram, word} 형태로 주입
 export function setFrequencyData({ syllable = null, bigram = null, word = null } = {}) {
   syllableFreq = syllable;
   bigramFreq = bigram;
   wordFreq = word;
+  runCache.clear();
 }
 
 // 빔서치/단어 보너스 가중치
@@ -65,125 +71,150 @@ function allTokensAt(str, pos, tokenSet) {
   return results;
 }
 
-// Yale → 한글 메인 진입점. 줄/공백/구두점은 그대로 보존
-export function reverseConvert(text, { labial = true } = {}) {
+// Yale run: Yale 로마자와 경계 기호(. -)의 연속. 그 밖의 문자(공백·숫자·괄호 등)는 변환하지 않고 보존
+const YALE_RUN = /[a-zA-Z.\-]+/g;
+
+// Yale → 한글 메인 진입점. 줄/공백/구두점은 그대로 보존.
+// opts: { labial = true, keepHyphens = false } — keepHyphens면 어절 내부 '-'(형태소 경계)를 출력에 남긴다
+export function reverseConvert(text, opts = {}) {
   if (!text || !text.trim()) return '';
-
-  const result = [];
-  const lines = text.split(/(\r?\n)/);
-
-  for (const line of lines) {
-    if (/^\r?\n$/.test(line)) { result.push(line); continue; }
-    const parts = line.split(/([^a-zA-Z.\-]+)/);
-    for (const part of parts) {
-      if (/^[a-zA-Z.\-]+$/.test(part)) {
-        result.push(parseYaleWord(part.toLowerCase(), { labial }));
-      } else {
-        result.push(part);
-      }
-    }
-  }
-  return result.join('');
+  return text.replace(YALE_RUN, (run, offset) =>
+    parseYaleWord(run, opts, { before: text[offset - 1], after: text[offset + run.length] }));
 }
 
-// '.', '-'로 세그먼트 분할 후, 자음만 있는 세그먼트는 앞 음절의 종성으로 결합
-export function parseYaleWord(word, { labial = true } = {}) {
-  // 어말 '.' run은 음절 경계가 아니라 문장부호로 취급 — 분리 후 결과에 재부착 (2026-06-12).
-  // 어말 '-'는 어간 표기(mek- 등)일 수 있어 기존 동작을 유지한다.
-  const trail = word.match(/\.+$/);
-  if (trail) {
-    const stem = word.slice(0, -trail[0].length);
-    return stem ? parseYaleWord(stem, { labial }) + trail[0] : trail[0];
-  }
-  const segments = word.split(/[.\-]/);
-  const results = [];
-  const parseSeg = (seg) => (syllableFreq && bigramFreq)
-    ? disambiguateSegment(seg, labial)
-    : parseYaleWordGreedy(seg, { labial });
+// Yale run 1개 → 최선의 한글 1개 (rankRun의 1위). ctx = run 바로 앞뒤 문자 (괄호 인접 판정용)
+export function parseYaleWord(word, opts = {}, ctx = {}) {
+  return rankRun(word, opts, ctx)[0]?.hangul ?? '';
+}
 
-  for (const seg of segments) {
-    if (!seg) { results.push(''); continue; }
+// 한 토큰(공백 단위)의 top-K 한글 후보. 모호성 없는 단어는 후보 1개, 빈도 데이터가 없으면 best 1개만.
+// 토큰에 비-Yale 문자(?, ,, ! 등)가 섞여 있으면 Yale run만 변환하고 앞뒤 문자는 보존.
+// '.'·'-'가 든 어절도 후보를 낸다 — 경계는 음절 분할을 고정할 뿐, 각 구간 안은 여전히 확률 변환이므로
+export function parseYaleWordCandidates(word, opts = {}, k = 5) {
+  if (!word) return [];
+  const runs = [...word.matchAll(YALE_RUN)];
+  // Yale run이 없는 토큰(숫자·기호 등)은 원형 그대로 후보 1개 — 토큰 소실 방지 (2026-06-12)
+  if (!runs.length) return [{ hangul: word, score: 0 }];
+  // run이 2개 이상(내부 구두점 혼합, 예: 'ka,na', '-(u)n')이면 각 run을 결정론 변환해 제자리 치환.
+  // 후보 분기는 단일 run일 때만 — 혼합 토큰은 best 1개로 변환 누락만 방지 (2026-06-12)
+  if (runs.length > 1) return [{ hangul: reverseConvert(word, opts), score: 0 }];
+  const m = runs[0];
+  const prefix = word.slice(0, m.index);
+  const suffix = word.slice(m.index + m[0].length);
+  const all = rankRun(m[0], opts, { before: prefix.slice(-1), after: suffix.charAt(0) });
+  const candidates = syllableFreq && bigramFreq ? all.slice(0, k) : all.slice(0, 1);
+  if (!prefix && !suffix) return candidates;
+  return candidates.map((c) => ({ ...c, hangul: prefix + c.hangul + suffix }));
+}
 
-    const hasVowel = /[aeiou]/.test(seg);
+// Yale run 1개 → 점수 내림차순 한글 후보 (최소 1개, 최대 BEAM_K개).
+// - 선두·말미의 '.'/'-' run은 그대로 보존: 문장부호(hankwuk.)와 인용형 하이픈(-ko → -고, mek- → 먹-)
+// - 내부의 '.'/'-'는 음절 경계를 고정하는 위치. 출력에서 '.'은 지우고, '-'는 keepHyphens일 때만 남긴다.
+//   단 '..' 이상(말줄임표)이나 변환되지 않은 구간(CD-ROM의 CD 등) 옆의 기호는 원문 그대로 둔다
+// - 구간별 후보를 빔으로 결합(점수 = 구간 점수의 합)하므로 하이픈이 든 어절도 후보를 고를 수 있다.
+//   1위는 구간별 최선의 연결과 같다 — 경계 바이그램을 더해도 정확도가 오르지 않아 넣지 않음 (실측)
+// - 자음만의 구간은 앞 음절의 종성으로 결합(ka-ss-ta → 갔다). 결합할 수 없거나 keepHyphens에서 '-' 뒤에
+//   오면, 형태소 표기 맥락(하이픈·괄호 인접, 숫자 인접 제외)의 소문자에 한해 자모로 쓴다
+//   (-(u)n → -(으)ㄴ, ka-ss-ta → 가-ㅆ-다). 그 밖에는 원문 그대로(NP, pp. 등)
+// ctx.before/after: run 바로 앞뒤의 문자 (run은 최장 일치이므로 로마자·'.'·'-'는 오지 않는다)
+function rankRun(run, { labial = true, keepHyphens = false } = {}, ctx = {}) {
+  const pb = /[()]/.test(ctx.before || '');
+  const pa = /[()]/.test(ctx.after || '');
+  const db = /\d/.test(ctx.before || '');
+  const da = /\d/.test(ctx.after || '');
+  const key = [labial, keepHyphens, pb, pa, db, da].map(Number).join('') + '|' + run;
+  const cached = runCache.get(key);
+  if (cached) return cached;
 
-    if (!hasVowel && results.length > 0) {
-      // 자음만 → 앞 음절의 종성으로 결합 시도
-      const prev = results[results.length - 1];
-      if (prev.length > 0) {
-        const lastChar = prev[prev.length - 1];
-        if (isHangulSyllable(lastChar)) {
-          const codaJamo = YALE_DOUBLE_CODA[seg] || Y2J_CODA[seg];
-          if (codaJamo) {
-            const SIndex = lastChar.codePointAt(0) - SBase;
-            const LIndex = Math.floor(SIndex / NCount);
-            const VIndex = Math.floor((SIndex % NCount) / TCount);
-            const TIndex = SIndex % TCount;
+  const lead = run.match(/^[.\-]+/)?.[0] ?? '';
+  const rest = run.slice(lead.length);
+  const tail = rest.match(/[.\-]+$/)?.[0] ?? '';
+  const core = rest.slice(0, rest.length - tail.length);
 
-            let newCoda = null;
-            if (TIndex === 0) {
-              newCoda = codaJamo;
-            } else {
-              const existingCoda = JONGSEONG[TIndex];
-              const doubleCoda = DOUBLE_CODA_JOIN[existingCoda + codaJamo];
-              if (doubleCoda) newCoda = doubleCoda;
-            }
-
-            if (newCoda) {
-              const onset = CHOSEONG[LIndex];
-              const vowel = JUNGSEONG[VIndex];
-              const newChar = composeHangul(onset, vowel, newCoda);
-              if (newChar) {
-                results[results.length - 1] = prev.slice(0, -1) + newChar;
-                continue;
-              }
-            }
+  let result = [{ hangul: run, score: 0 }]; // 기호만으로 된 run('-', '...')은 그대로
+  if (core) {
+    const pieces = core.split(/([.\-]+)/); // 짝수 인덱스 = 구간, 홀수 인덱스 = 경계 기호
+    const lastIdx = pieces.length - 1;
+    // raw: 직전 구간이 변환되지 않고 원문 그대로 남았는지 (경계 기호 출력 판정용)
+    let beam = [{ hangul: '', score: 0, raw: false }];
+    for (let i = 0; i <= lastIdx; i += 2) {
+      const raw = pieces[i];
+      const seg = raw.toLowerCase();
+      const sep = i > 0 ? pieces[i - 1] : '';
+      const ellipsis = sep.includes('..');
+      const sepOut = (prevRaw, curRaw) =>
+        ellipsis || prevRaw || curRaw ? sep : keepHyphens ? sep.replace(/\./g, '') : '';
+      if (/[aeiou]/.test(seg)) {
+        const cands = segmentCandidates(seg, labial);
+        const next = [];
+        for (const b of beam) {
+          for (const c of cands) {
+            const curRaw = c.hangul.toLowerCase() === seg;
+            next.push({ hangul: b.hangul + sepOut(b.raw, curRaw) + c.hangul, score: b.score + c.score, raw: curRaw });
           }
         }
+        beam = topCandidates(next);
+      } else {
+        const hyphenBefore = sep.includes('-');
+        const edgeDigit = (i === 0 && db) || (i === lastIdx && da);
+        const morph = !edgeDigit && (hyphenBefore || (pieces[i + 1] || '').includes('-')
+          || (i === 0 && (lead.includes('-') || pb))
+          || (i === lastIdx && (tail.includes('-') || pa)));
+        const jamo = morph && raw === seg ? consonantJamo(seg) : null;
+        beam = topCandidates(beam.map((b) => {
+          const attached = (keepHyphens && hyphenBefore) || ellipsis ? null : attachCoda(b.hangul, seg);
+          if (attached) return { ...b, hangul: attached, raw: false };
+          return { ...b, hangul: b.hangul + sepOut(b.raw, !jamo) + (jamo || raw), raw: !jamo };
+        }));
       }
-      results.push(seg);
-    } else {
-      results.push(parseSeg(seg));
     }
+    result = beam.map((b) => ({ hangul: lead + b.hangul + tail, score: b.score }));
   }
-
-  return results.join('');
+  result.forEach(Object.freeze);
+  if (runCache.size >= RUN_CACHE_MAX) runCache.clear();
+  runCache.set(key, result);
+  return result;
 }
 
-// 한 word의 top-K 한글 후보를 반환. 모호성 없는 단어는 후보 1개.
-// .나 -로 음절 경계가 명시되어 있거나 빈도 데이터가 없으면 best 1개만.
-// 단, 어말 '.' run은 경계가 아니라 문장부호로 취급해 suffix로 이동 (parseYaleWord와 일관).
-// word에 비-Yale 문자(?, ,, ! 등)가 섞여 있으면 Yale 코어만 추출 후 prefix/suffix 보존
-export function parseYaleWordCandidates(word, { labial = true } = {}, k = 5) {
-  if (!word) return [];
-  const runs = word.match(/[a-zA-Z.\-]+/g);
-  // Yale run이 없는 토큰(숫자·기호 등)은 원형 그대로 후보 1개 — 토큰 소실 방지 (2026-06-12)
-  if (!runs) return [{ hangul: word, score: 0 }];
-  // run이 2개 이상(내부 구두점 혼합, 예: 'ka,na')이면 각 run을 결정론 변환해 제자리 치환.
-  // 후보 분기는 단일 run일 때만 — 혼합 토큰은 best 1개로 변환 누락만 방지 (2026-06-12)
-  if (runs.length > 1) {
-    const hangul = word.replace(/[a-zA-Z.\-]+/g, (r) => parseYaleWord(r.toLowerCase(), { labial }));
-    return [{ hangul, score: 0 }];
+// 모음을 포함한 구간의 후보 (빈도 데이터가 있으면 빔서치 top-K, 없으면 탐욕 파서 1개)
+function segmentCandidates(seg, labial) {
+  if (syllableFreq && bigramFreq) return disambiguateSegment(seg, labial, true);
+  return [{ hangul: parseYaleWordGreedy(seg, { labial }), score: 0 }];
+}
+
+// 점수 내림차순(안정 정렬) + 같은 문자열 중복 제거 + 상위 BEAM_K
+function topCandidates(list) {
+  const seen = new Set();
+  const out = [];
+  for (const c of [...list].sort((a, b) => b.score - a.score)) {
+    if (seen.has(c.hangul)) continue;
+    seen.add(c.hangul);
+    out.push(c);
+    if (out.length >= BEAM_K) break;
   }
-  const m = word.match(/[a-zA-Z.\-]+/);
-  let core = m[0];
-  let suffix = word.slice(m.index + core.length);
-  const prefix = word.slice(0, m.index);
-  const trail = core.match(/\.+$/);
-  if (trail && trail[0].length < core.length) {
-    core = core.slice(0, -trail[0].length);
-    suffix = trail[0] + suffix;
-  }
-  const w = core.toLowerCase();
-  let candidates;
-  if (/[.\-]/.test(w) || !syllableFreq || !bigramFreq) {
-    const best = parseYaleWord(w, { labial });
-    candidates = best ? [{ hangul: best, score: 0 }] : [];
-  } else {
-    const all = disambiguateSegment(w, labial, true);
-    candidates = Array.isArray(all) ? all.slice(0, k) : [];
-  }
-  if (!prefix && !suffix) return candidates;
-  return candidates.map(c => ({ ...c, hangul: prefix + c.hangul + suffix }));
+  return out;
+}
+
+// str 끝 음절의 종성으로 자음 구간을 결합 (가 + ss → 갔, 갈 + k → 갉). 불가하면 null
+function attachCoda(str, seg) {
+  const lastChar = str.slice(-1);
+  if (!isHangulSyllable(lastChar)) return null;
+  const codaJamo = YALE_DOUBLE_CODA[seg] || Y2J_CODA[seg];
+  if (!codaJamo) return null;
+  const SIndex = lastChar.codePointAt(0) - SBase;
+  const TIndex = SIndex % TCount;
+  const newCoda = TIndex === 0 ? codaJamo : DOUBLE_CODA_JOIN[JONGSEONG[TIndex] + codaJamo];
+  if (!newCoda) return null;
+  const onset = CHOSEONG[Math.floor(SIndex / NCount)];
+  const vowel = JUNGSEONG[Math.floor((SIndex % NCount) / TCount)];
+  const newChar = composeHangul(onset, vowel, newCoda);
+  return newChar ? str.slice(0, -1) + newChar : null;
+}
+
+// 자음만의 구간 → 호환 자모 (n → ㄴ, ss → ㅆ, lk → ㄺ, pp → ㅃ). Yale 자음이 아니면 null
+const ONSET_ONLY_JAMO = { pp: 'ㅃ', tt: 'ㄸ', cc: 'ㅉ' };
+function consonantJamo(seg) {
+  return YALE_DOUBLE_CODA[seg] || Y2J_CODA[seg] || ONSET_ONLY_JAMO[seg] || null;
 }
 
 // ===== 스마트 파서: 그래프 + 빔서치 DP =====
@@ -355,6 +386,7 @@ export function parseYaleWordGreedy(word, { labial = true } = {}) {
       continue;
     }
 
+    const start = pos; // 합성 실패 시 이 음절에서 소비한 문자를 그대로 되돌리기 위함
     let onset = 'ㅇ';
     let vowel = null;
     let coda = null;
@@ -445,11 +477,8 @@ export function parseYaleWordGreedy(word, { labial = true } = {}) {
     }
 
     const hangul = composeHangul(onset, finalVowel, coda);
-    if (hangul) {
-      syllables.push(hangul);
-    } else {
-      syllables.push(vowel);
-    }
+    // 합성할 수 없으면 소비한 문자열을 원형 그대로 — 모음만 남기면 초성·종성이 소리 없이 사라진다
+    syllables.push(hangul || word.slice(start, pos));
   }
 
   return syllables.join('');
