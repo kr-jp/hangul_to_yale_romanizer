@@ -10,6 +10,7 @@ import Footer from './components/Footer';
 import InterlinearPanel from './components/InterlinearPanel';
 import HistoryDrawer from './components/HistoryDrawer';
 import RefDrawer from './components/RefDrawer';
+import DictionaryDrawer from './components/DictionaryDrawer';
 import { Toaster } from './components/ui/sonner';
 import { useI18n } from './hooks/useI18n';
 import { useFrequencyData } from './hooks/useFrequencyData';
@@ -21,15 +22,39 @@ import {
   readFormat,
   readKeepHyphens,
   readTabCopy,
+  readUserDictRaw,
   recordHistory,
   writeFormat,
   writeKeepHyphens,
   writeTabCopy,
+  writeUserDictRaw,
 } from './lib/storage';
 import { copyText } from './lib/clipboard';
 import { buildShareUrl, decodeShareState } from './lib/url-codec';
-import { FORMAT_FILE_INFO, buildBackup, downloadText, timestamp } from './lib/download';
-import type { Direction, HistoryItem, OutputFormat, ShareState } from './lib/types';
+import { FORMAT_FILE_INFO, buildBackup, buildDictionaryExport, downloadText, timestamp } from './lib/download';
+import {
+  EMPTY_DICT,
+  applyChange,
+  describeToken,
+  dictFromJSON,
+  dictSize,
+  dictToJSON,
+  entriesUsedIn,
+  learnCorrection,
+  mergeDicts,
+  summarizeEntries,
+} from './lib/user-dict';
+import type {
+  DictChange,
+  DictEntry,
+  DictScope,
+  Direction,
+  HistoryItem,
+  OutputFormat,
+  ShareState,
+  UserDict,
+  WordEditor,
+} from './lib/types';
 
 interface AppState {
   direction: Direction;
@@ -46,8 +71,12 @@ interface AppState {
   tabCopy: boolean;
   // y2h 형태소 경계 '-'를 한글 출력에 남김 (기본 OFF). 출력이 달라지므로 공유 URL `h`에 포함 (2026-10-10)
   keepHyphens: boolean;
-  // 세션 한정. 공유 URL `o`로만 복원. 방향 전환 시에도 비우지 않음 (§8-3)
+  // 세션 한정. 공유 URL `o`로만 복원. 방향 전환 시에도 비우지 않음 (§8-3).
+  // 2026-10부터 후보 선택은 사용자 사전으로 기록하므로 새로 생기지 않는다 (예전 공유 URL 호환용)
   wordOverrides: Map<string, string>;
+  // 이번 세션에만 적용하는 사전 항목 — '사전에 기억'을 끄고 고친 것, 공유 URL `u`로 받은 것.
+  // 저장된 사용자 사전보다 우선 (App의 dict = mergeDicts(userDict, sessionDict))
+  sessionDict: UserDict;
   // 글로스 (Stage 5 기능 2). key = splitLines가 낸 줄 텍스트(trim됨) — 줄 수정 시 키 불일치로 자연 무효화
   glossEnabled: boolean;
   glosses: Map<string, string[]>;
@@ -73,7 +102,7 @@ type AppAction =
       >;
     }
   | { type: 'SET_FORMAT'; value: OutputFormat }
-  | { type: 'SET_OVERRIDE'; word: string; hangul: string }
+  | { type: 'CHANGE_SESSION_DICT'; change: Partial<DictChange> }
   | { type: 'SET_GLOSS'; lineKey: string; tokenIndex: number; value: string }
   | { type: 'RESTORE_HISTORY'; item: HistoryItem }
   | { type: 'APPLY_SHARE'; share: ShareState };
@@ -112,10 +141,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_FORMAT':
       if (action.value === state.format) return state;
       return { ...state, format: action.value };
-    case 'SET_OVERRIDE': {
-      const next = new Map(state.wordOverrides);
-      next.set(action.word, action.hangul);
-      return { ...state, wordOverrides: next };
+    case 'CHANGE_SESSION_DICT': {
+      const next = applyChange(state.sessionDict, action.change);
+      return next === state.sessionDict ? state : { ...state, sessionDict: next };
     }
     case 'SET_GLOSS': {
       // lineKey의 배열을 토큰 수 길이로 패딩/절단 후 [tokenIndex] 기록 (Stage 5 §2.2)
@@ -157,11 +185,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
         tabCopy: state.tabCopy, // 공유 대상 아님 — 방문자 설정 유지
         keepHyphens: !!s.h,
         wordOverrides: overrides,
+        sessionDict: s.u ? dictFromJSON({ words: s.u.w, morphemes: s.u.m }) : EMPTY_DICT,
         glossEnabled: !!s.ge,
         glosses,
       };
     }
   }
+}
+
+// 사전의 모든 키 (세션 항목 지우기용)
+function allKeys(d: UserDict): { scope: DictScope; key: string }[] {
+  return [
+    ...[...d.words.keys()].map((key) => ({ scope: 'words' as const, key })),
+    ...[...d.morphemes.keys()].map((key) => ({ scope: 'morphemes' as const, key })),
+  ];
 }
 
 // 부팅: 기본값 구성 후 URL ?s= 가 있으면 APPLY_SHARE를 즉시 적용 (URL이 기본값·localStorage보다 우선)
@@ -179,6 +216,7 @@ function initAppState(): AppState {
     tabCopy: readTabCopy(),
     keepHyphens: readKeepHyphens(),
     wordOverrides: new Map(),
+    sessionDict: EMPTY_DICT,
     glossEnabled: false,
     glosses: new Map(),
   };
@@ -191,6 +229,9 @@ export default function App() {
   const [state, dispatch] = useReducer(appReducer, undefined, initAppState);
   const [histOpen, setHistOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
+  const [dictOpen, setDictOpen] = useState(false);
+  // 사용자 사전 (저장분). 이번 세션 항목(state.sessionDict)과 합쳐 y2h 변환에 넘긴다
+  const [userDict, setUserDict] = useState<UserDict>(() => dictFromJSON(readUserDictRaw()));
 
   // format은 변경 시마다 localStorage에 기록 (공유 URL 복원 포함 — 원본 setFormat 경유 동작, §8-5)
   useEffect(() => {
@@ -207,18 +248,32 @@ export default function App() {
     writeKeepHyphens(state.keepHyphens);
   }, [state.keepHyphens]);
 
+  // 사용자 사전 영속화 — 읽어 온 값 그대로인 첫 렌더는 건너뛴다
+  const dictLoaded = useRef(false);
+  useEffect(() => {
+    if (!dictLoaded.current) {
+      dictLoaded.current = true;
+      return;
+    }
+    if (!writeUserDictRaw(dictToJSON(userDict))) toast(t('dictSaveFailed'), { duration: 4000 });
+    // 사전이 바뀔 때만 저장 (t는 언어 전환으로만 바뀐다)
+  }, [userDict]);
+
   // y2h 진입 시 빈도 데이터 lazy load. 로드 완료 시 version 증가 → 출력 재계산
   const freqVersion = useFrequencyData(state.direction);
 
+  const dict = useMemo(() => mergeDicts(userDict, state.sessionDict), [userDict, state.sessionDict]);
   const opts = useMemo(
-    () =>
-      getOpts({
+    () => ({
+      ...getOpts({
         sepEnabled: state.sepEnabled,
         sepChar: state.sepChar,
         labial: state.labial,
         keepHyphens: state.keepHyphens,
       }),
-    [state.sepEnabled, state.sepChar, state.labial, state.keepHyphens],
+      dict: dictSize(dict) ? dict : null,
+    }),
+    [state.sepEnabled, state.sepChar, state.labial, state.keepHyphens, dict],
   );
 
   // 출력은 파생값 (§2.1). 대량 입력은 Worker에서 계산하고 그동안 pending (useConvertedOutput)
@@ -296,8 +351,19 @@ export default function App() {
     const g = collectShareGlosses(lines, state.glosses);
     if (Object.keys(g).length > 0) share.g = g;
     if (state.keepHyphens) share.h = true;
+    // 받는 사람에게는 사전이 없으므로 이 입력에 쓰인 항목만 함께 보낸다
+    const used = usedDictJSON();
+    if (Object.keys(used.words).length || Object.keys(used.morphemes).length) {
+      share.u = {};
+      if (Object.keys(used.words).length) share.u.w = used.words;
+      if (Object.keys(used.morphemes).length) share.u.m = used.morphemes;
+    }
     return share;
   };
+
+  // 현재 입력의 변환에 쓰인 사전 항목 (y2h만 — h2y 입력에는 해당 없음)
+  const usedDictJSON = () =>
+    dictToJSON(state.direction === 'y2h' ? entriesUsedIn(state.input, dict) : EMPTY_DICT);
 
   // 결과 다운로드 (§4.5): 출력이 비면 noContent 토스트 후 중단
   const handleDownload = () => {
@@ -331,6 +397,7 @@ export default function App() {
       output: output || '',
       wordOverrides: state.wordOverrides,
       glosses: collectShareGlosses(lines, state.glosses),
+      userDictionary: usedDictJSON(),
       shareUrl: buildShareUrl(captureShare()),
     });
     commitHistory();
@@ -361,10 +428,57 @@ export default function App() {
       dispatch({ type: 'SET_GLOSS', lineKey, tokenIndex, value }),
     [],
   );
-  const onOverride = useCallback(
-    (word: string, hangul: string) => dispatch({ type: 'SET_OVERRIDE', word, hangul }),
-    [],
+  // ===== 사용자 사전 =====
+  // remember: 저장된 사전에 기록 (아니면 이번 세션에만). 삭제는 어느 쪽에 있든 지운다
+  const tRef = useRef(t);
+  const optsRef = useRef(opts);
+  useEffect(() => {
+    tRef.current = t;
+    optsRef.current = opts;
+  });
+  const applyDictChange = useCallback((change: DictChange, remember: boolean) => {
+    if (remember) {
+      setUserDict((d) => applyChange(d, change));
+      // 같은 키의 세션 항목이 남아 있으면 저장한 항목을 가리므로 함께 지운다
+      const added = change.add.map(({ scope, key }) => ({ scope, key }));
+      dispatch({ type: 'CHANGE_SESSION_DICT', change: { remove: [...change.remove, ...added] } });
+    } else {
+      setUserDict((d) => applyChange(d, { remove: change.remove }));
+      dispatch({ type: 'CHANGE_SESSION_DICT', change });
+    }
+    const tr = tRef.current;
+    const message = change.add.length
+      ? tr(remember ? 'dictSaved' : 'dictSessionOnly').replace('{e}', summarizeEntries(change.add))
+      : tr('dictRemoved').replace('{e}', summarizeEntries(change.remove));
+    toast(message, { duration: 3000 });
+  }, []);
+  const wordEditor = useMemo<WordEditor>(
+    () => ({
+      describe: (token) => describeToken(token, optsRef.current),
+      correct: (token, value, remember) => {
+        const change = learnCorrection(token, value, optsRef.current);
+        if (change) applyDictChange(change, remember);
+      },
+      remove: (entry) => applyDictChange({ add: [], remove: [entry] }, true),
+    }),
+    [applyDictChange],
   );
+  const handleDictImport = (imported: UserDict) => {
+    setUserDict((d) => mergeDicts(d, imported));
+    dispatch({ type: 'CHANGE_SESSION_DICT', change: { remove: allKeys(imported) } });
+    toast(t('dictImported').replace('{n}', String(dictSize(imported))), { duration: 3000 });
+  };
+  const handleDictExport = () => {
+    downloadText(
+      JSON.stringify(buildDictionaryExport(dictToJSON(userDict)), null, 2),
+      `yale-dictionary-${timestamp()}.json`,
+      'application/json',
+    );
+  };
+  const handleDictClear = () => {
+    setUserDict(EMPTY_DICT);
+    dispatch({ type: 'CHANGE_SESSION_DICT', change: { remove: allKeys(state.sessionDict) } });
+  };
 
   const handleDirectionChange = (d: Direction) => {
     if (d === state.direction) return;
@@ -379,6 +493,8 @@ export default function App() {
         onDirectionChange={handleDirectionChange}
         onOpenHistory={() => setHistOpen(true)}
         onOpenRef={() => setRefOpen(true)}
+        dictCount={dictSize(userDict)}
+        onOpenDict={() => setDictOpen(true)}
       />
       <main className="mx-auto w-full max-w-5xl flex-1 space-y-6 px-4 py-6 md:py-8">
         <section className="space-y-5 rounded-xl border border-border bg-card p-4 shadow-sm md:p-6">
@@ -428,11 +544,23 @@ export default function App() {
           dataVersion={freqVersion}
           onCopied={onCardCopied}
           onGlossChange={onGlossChange}
-          onOverride={onOverride}
+          editor={state.direction === 'y2h' ? wordEditor : null}
         />
       </main>
       <HistoryDrawer open={histOpen} onOpenChange={setHistOpen} onRestore={handleRestore} />
       <RefDrawer open={refOpen} onOpenChange={setRefOpen} />
+      <DictionaryDrawer
+        open={dictOpen}
+        onOpenChange={setDictOpen}
+        userDict={userDict}
+        sessionDict={state.sessionDict}
+        onAdd={(entry: DictEntry) => applyDictChange({ add: [entry], remove: [] }, true)}
+        onRemove={(entry: { scope: DictScope; key: string }) => applyDictChange({ add: [], remove: [entry] }, true)}
+        onSaveSession={(entries: DictEntry[]) => applyDictChange({ add: entries, remove: [] }, true)}
+        onClear={handleDictClear}
+        onImport={handleDictImport}
+        onExport={handleDictExport}
+      />
       <Footer />
       <Toaster />
     </div>

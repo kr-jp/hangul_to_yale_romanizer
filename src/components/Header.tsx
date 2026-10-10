@@ -1,5 +1,5 @@
 // 헤더 — h1/sub 하드코딩 유지 (설계 문서 §6), 테마·언어는 내부 훅 사용 (§1)
-import { MoonIcon, SunIcon } from 'lucide-react';
+import { BookAIcon, MoonIcon, SunIcon } from 'lucide-react';
 import DirectionToggle from './DirectionToggle';
 import { Button } from './ui/button';
 import { useI18n } from '@/hooks/useI18n';
@@ -11,9 +11,18 @@ interface HeaderProps {
   onDirectionChange(d: Direction): void;
   onOpenHistory(): void;
   onOpenRef(): void;
+  dictCount: number; // 저장된 사용자 사전 항목 수 (버튼에 표시)
+  onOpenDict(): void;
 }
 
-export default function Header({ direction, onDirectionChange, onOpenHistory, onOpenRef }: HeaderProps) {
+export default function Header({
+  direction,
+  onDirectionChange,
+  onOpenHistory,
+  onOpenRef,
+  dictCount,
+  onOpenDict,
+}: HeaderProps) {
   const { t, toggleLang } = useI18n();
   const { theme, toggle } = useTheme();
 
@@ -27,14 +36,33 @@ export default function Header({ direction, onDirectionChange, onOpenHistory, on
             Yale romanization for Korean linguistics
           </p>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        {/* 좁은 화면: 버튼 여백을 줄여 한 줄에 들어가게 (사용자 사전 버튼이 추가되어 줄바꿈되던 문제) */}
+        <div className="ml-auto flex flex-wrap items-center gap-0.5 sm:gap-1.5">
           <DirectionToggle value={direction} onChange={onDirectionChange} />
-          <Button variant="ghost" size="sm" onClick={onOpenHistory} aria-haspopup="dialog">
+          <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={onOpenHistory} aria-haspopup="dialog">
             {t('openHist')}
           </Button>
-          <Button variant="ghost" size="sm" onClick={onOpenRef} aria-haspopup="dialog">
+          <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={onOpenRef} aria-haspopup="dialog">
             {t('openRef')}
           </Button>
+          {/* 사용자 사전은 Yale→한글 전용 (2026-10). 헤더가 여러 줄로 늘어나지 않게 짧은 이름, 좁은 화면에서는 아이콘만 */}
+          {direction === 'y2h' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 px-2 sm:gap-1.5 sm:px-3"
+              onClick={onOpenDict}
+              aria-haspopup="dialog"
+              aria-label={t('openDict')}
+              title={t('openDict')}
+            >
+              <BookAIcon className="sm:hidden" />
+              <span className="hidden sm:inline">{t('openDictShort')}</span>
+              {dictCount > 0 && (
+                <span className="hidden text-xs tabular-nums text-muted-foreground sm:inline">{dictCount}</span>
+              )}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -45,7 +73,7 @@ export default function Header({ direction, onDirectionChange, onOpenHistory, on
           >
             {theme === 'light' ? <SunIcon /> : <MoonIcon />}
           </Button>
-          <Button variant="ghost" size="sm" onClick={toggleLang}>
+          <Button variant="ghost" size="sm" className="px-2 sm:px-3" onClick={toggleLang}>
             {t('langToggle')}
           </Button>
           <a

@@ -37,4 +37,11 @@ describe('sanitizeShareState', () => {
     assert.equal(sanitizeShareState({ h: 1, ge: true }).h, true);
     assert.equal('h' in sanitizeShareState({}), false);
   });
+
+  test('사용자 사전 항목 u는 문자열 값만, 비면 생략', () => {
+    const s = sanitizeShareState({ u: { w: { 'ki-ka': '키-가', x: 1 }, m: 'bad' } });
+    assert.deepEqual(s.u, { w: { 'ki-ka': '키-가' } });
+    assert.equal('u' in sanitizeShareState({ u: { w: { x: 1 } } }), false);
+    assert.equal('u' in sanitizeShareState({ u: [] }), false);
+  });
 });

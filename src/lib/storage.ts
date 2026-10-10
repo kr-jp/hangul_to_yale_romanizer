@@ -9,6 +9,8 @@ export const KEYS = {
   format: 'yaleFormatV1',
   tabCopy: 'yaleTabCopyV1',
   keepHyphens: 'yaleKeepHyphenV1',
+  userDict: 'yaleUserDictV1',
+  dictRemember: 'yaleDictRememberV1',
 } as const;
 
 // 'gloss'(TSV)는 UI에서 제거됨(2026-06-12) — 구버전 localStorage·공유 URL의 'gloss'는 plain으로 폴백
@@ -92,6 +94,29 @@ export function readKeepHyphens(): boolean {
 
 export function writeKeepHyphens(on: boolean): void {
   setItem(KEYS.keepHyphens, on ? 'on' : 'off');
+}
+
+// ===== 사용자 사전 (2026-10) =====
+// 저장 형식 {v: 1, words: {...}, morphemes: {...}}. 형식 검증·Map 변환은 user-dict.ts(dictFromJSON)가 맡는다
+export function readUserDictRaw(): unknown {
+  try {
+    return JSON.parse(getItem(KEYS.userDict) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function writeUserDictRaw(data: { words: Record<string, string>; morphemes: Record<string, string> }): boolean {
+  return setItem(KEYS.userDict, JSON.stringify({ v: 1, ...data }));
+}
+
+// 후보 창의 '사전에 기억' 체크 — 기본 ON. 끄면 고친 내용은 이번 세션에만 적용
+export function readDictRemember(): boolean {
+  return getItem(KEYS.dictRemember) !== 'off';
+}
+
+export function writeDictRemember(on: boolean): void {
+  setItem(KEYS.dictRemember, on ? 'on' : 'off');
 }
 
 // ===== 히스토리 =====

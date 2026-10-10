@@ -1,15 +1,16 @@
 // 인터리니어 블록 — 윗줄 원문 토큰, 아랫줄 변환 (설계 문서 §4.4)
 // 카드 클릭 = formatSingleGlossedExample 결과 복사(Plain + タブ区切り ON이면 공백→탭, 글로스 없으면 내부 위임으로 현행과 바이트 동일).
-// y2h 모호어(후보>1)는 Popover로 후보 교체 — 클릭이 카드 복사로 버블되지 않게 차단.
+// y2h 아랫줄 어절은 WordPopover로 후보 선택·직접 입력(사용자 사전) — 클릭이 카드 복사로 버블되지 않게 차단.
 // 글로스 모드(Stage 5 §2.1): 어절-컬럼 레이아웃 + 어절별 글로스 input. off면 현행 2행 그대로.
-import { Fragment, useState } from 'react';
+import { Fragment } from 'react';
 import { toast } from 'sonner';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import WordPopover from './WordPopover';
 import { useI18n } from '@/hooks/useI18n';
 import { copyText } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { formatSingleGlossedExample } from '@/lib/gloss-format.js';
-import type { OutputFormat, YaleCandidate } from '@/lib/types';
+import { isEditableToken } from '@/lib/user-dict';
+import type { OutputFormat, WordEditor, YaleCandidate } from '@/lib/types';
 
 export interface InterlinearBlockProps {
   index: number;
@@ -23,74 +24,8 @@ export interface InterlinearBlockProps {
   gloss: string[]; // 토큰 수로 패딩 완료본 (Panel이 부착·패딩 — gloss-format은 길이 방어 안 함)
   tabCopy: boolean; // タブ区切り — Plain 복사 시 공백→탭 치환 (메인 복사 버튼과 통일)
   onCopied?(): void; // 카드 복사 시 호출 (히스토리 확정용)
-  onOverride(word: string, hangul: string): void;
+  editor: WordEditor | null; // y2h 어절 편집 (h2y는 null)
   onGlossChange(tokenIndex: number, value: string): void; // Panel이 lineKey 커링
-}
-
-// y2h 모호어 1개 — 점선 밑줄 + 클릭 시 후보 Popover (원본 .inter-word.ambiguous / .edited)
-function CandidateWord({
-  roma,
-  candidates,
-  selected,
-  edited,
-  onSelect,
-}: {
-  roma: string;
-  candidates: YaleCandidate[];
-  selected: string | undefined; // 현재 선택값 — override 우선, 아니면 best (원본 currentSelected)
-  edited: boolean;
-  onSelect(hangul: string): void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <span
-          role="button"
-          // 모호어 클릭이 카드 복사로 버블되면 안 됨 (§4.4)
-          onClick={(e) => e.stopPropagation()}
-          className={cn(
-            'inline-block cursor-pointer rounded-xs border-b border-dotted border-primary px-px transition-colors hover:bg-accent hover:text-accent-foreground',
-            // override된 모호어 — 점선 대신 실선 (원본 .edited)
-            edited && 'border-solid font-medium text-primary',
-          )}
-        >
-          {roma}
-        </span>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="max-h-72 w-auto min-w-36 overflow-auto p-1"
-        // Portal 내부 클릭도 React 트리상 카드로 버블되므로 차단
-        onClick={(e) => e.stopPropagation()}
-      >
-        {candidates.map((c, i) => {
-          const isSelected = c.hangul === selected;
-          return (
-            <button
-              key={`${i}-${c.hangul}`}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(c.hangul);
-                setOpen(false);
-              }}
-              className={cn(
-                // H1 동일 원칙: 후보는 한글이므로 sans
-                'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-sans text-sm hover:bg-muted',
-                isSelected && 'bg-accent font-semibold text-accent-foreground',
-              )}
-            >
-              {isSelected && <span aria-hidden className="text-xs text-primary">✓</span>}
-              <span>{c.hangul}</span>
-              {/* 첫 번째(best) 강조 — selected와 겹치면 ✓만 (원본 .best.selected) */}
-              {i === 0 && !isSelected && <span aria-hidden className="ml-auto text-[11px] text-primary">★</span>}
-            </button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 export default function InterlinearBlock({
@@ -105,7 +40,7 @@ export default function InterlinearBlock({
   gloss,
   tabCopy,
   onCopied,
-  onOverride,
+  editor,
   onGlossChange,
 }: InterlinearBlockProps) {
   const { t } = useI18n();
@@ -122,17 +57,20 @@ export default function InterlinearBlock({
     void copyText(text).then(() => toast(t('copied'), { duration: 2000 }));
   };
 
-  // y2h 아랫줄 1어절 — 모호어는 CandidateWord(Popover), 아니면 텍스트 (2행·컬럼 레이아웃 공용)
+  // y2h 아랫줄 1어절 — 고칠 수 있는 어절(Yale run 1개)·모호어는 WordPopover, 아니면 텍스트 (2행·컬럼 레이아웃 공용)
   const renderRoma = (i: number) => {
     const candidates = candidatesByWord?.[i] || [];
-    if (candidatesByWord && candidates.length > 1) {
+    const editable = isEditableToken(tokens[i]);
+    if (candidatesByWord && editor && (editable || candidates.length > 1)) {
       return (
-        <CandidateWord
+        <WordPopover
+          token={tokens[i]}
           roma={romas[i]}
           candidates={candidates}
           selected={wordOverrides.get(tokens[i]) || candidates[0]?.hangul}
           edited={wordOverrides.has(tokens[i])}
-          onSelect={(hangul) => onOverride(tokens[i], hangul)}
+          editable={editable}
+          editor={editor}
         />
       );
     }
@@ -213,26 +151,12 @@ export default function InterlinearBlock({
         )}
       >
         {candidatesByWord ? (
-          romas.map((roma, i) => {
-            const candidates = candidatesByWord[i] || [];
-            const ambiguous = candidates.length > 1;
-            return (
-              <Fragment key={i}>
-                {ambiguous ? (
-                  <CandidateWord
-                    roma={roma}
-                    candidates={candidates}
-                    selected={wordOverrides.get(tokens[i]) || candidates[0]?.hangul}
-                    edited={wordOverrides.has(tokens[i])}
-                    onSelect={(hangul) => onOverride(tokens[i], hangul)}
-                  />
-                ) : (
-                  <span>{roma}</span>
-                )}
-                {i < romas.length - 1 ? ' ' : null}
-              </Fragment>
-            );
-          })
+          romas.map((_, i) => (
+            <Fragment key={i}>
+              {renderRoma(i)}
+              {i < romas.length - 1 ? ' ' : null}
+            </Fragment>
+          ))
         ) : (
           romas.join(' ')
         )}

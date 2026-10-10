@@ -39,12 +39,14 @@ export interface BackupArgs {
   output: string;
   wordOverrides: ReadonlyMap<string, string>;
   glosses: Record<string, string[]>; // 캡처 시점 필터 결과 (collectShareGlosses)
+  // 입력 변환에 쓰인 사용자 사전 항목 (entriesUsedIn → dictToJSON)
+  userDictionary: { words: Record<string, string>; morphemes: Record<string, string> };
   shareUrl: string;
 }
 
 // 백업 JSON 객체 생성 — 키 순서는 §4.6 사양 그대로 (JSON.stringify가 삽입 순서를 보존)
 // Stage 5: glossEnabled/glosses는 additive — 기존 키 순서 불변, version 1 유지 (§2.5)
-// 2026-10: keepHyphens도 additive (options 끝에 추가)
+// 2026-10: keepHyphens·userDictionary도 additive (options 끝, glosses 뒤에 추가)
 export function buildBackup(args: BackupArgs) {
   return {
     version: 1,
@@ -65,6 +67,19 @@ export function buildBackup(args: BackupArgs) {
     output: args.output,
     wordOverrides: Object.fromEntries(args.wordOverrides),
     glosses: args.glosses,
+    userDictionary: args.userDictionary,
     shareUrl: args.shareUrl,
+  };
+}
+
+// 사용자 사전 내보내기 파일 — 다른 브라우저·PC에서 '가져오기'로 읽는다
+export function buildDictionaryExport(dict: { words: Record<string, string>; morphemes: Record<string, string> }) {
+  return {
+    version: 1,
+    tool: 'Hangul ↔ Yale Romanizer',
+    type: 'user-dictionary',
+    exportedAt: new Date().toISOString(),
+    words: dict.words,
+    morphemes: dict.morphemes,
   };
 }

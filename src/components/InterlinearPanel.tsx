@@ -1,6 +1,6 @@
 // 인터리니어 패널 (설계 문서 §4.4)
 // interlinear=true면 입력이 비어도 타이틀+힌트만 표시 (베이스라인과 동일).
-// 줄(splitLines)당 InterlinearBlock 1개 — y2h는 토큰별 후보 5개 + override 반영.
+// 줄(splitLines)당 InterlinearBlock 1개 — y2h는 토큰별 후보 5개(사용자 사전 반영) + 예전 공유 URL의 override.
 // 대량 입력(파일 드롭 등)은 앞쪽 일부만 그린다 — 수천 장의 카드가 타이핑마다 다시 그려져 입력이 멈추던 문제
 import { memo, useState } from 'react';
 import InterlinearBlock from './InterlinearBlock';
@@ -9,7 +9,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { pickPreferred } from '@/lib/convert-pipeline';
 import { convert } from '../converter/h2y.js';
 import { parseYaleWordCandidates } from '../converter/y2h.js';
-import type { ConvertOpts, Direction, OutputFormat, YaleCandidate } from '@/lib/types';
+import type { ConvertOpts, Direction, OutputFormat, WordEditor, YaleCandidate } from '@/lib/types';
 
 export interface InterlinearPanelProps {
   visible: boolean;
@@ -27,7 +27,7 @@ export interface InterlinearPanelProps {
   dataVersion: number;
   onCopied?(): void; // 카드 복사 시 호출 (히스토리 확정용)
   onGlossChange(lineKey: string, tokenIndex: number, value: string): void;
-  onOverride(word: string, hangul: string): void;
+  editor: WordEditor | null; // y2h 어절의 후보 선택·직접 입력 (참조 고정 — h2y는 null)
 }
 
 // 처음에 그리는 최대 줄 수 (변환 결과 textarea에는 항상 전문이 있다)
@@ -46,7 +46,7 @@ function InterlinearPanel({
   tabCopy,
   onCopied,
   onGlossChange,
-  onOverride,
+  editor,
 }: InterlinearPanelProps) {
   const { t } = useI18n();
   const [showAll, setShowAll] = useState(false);
@@ -94,7 +94,7 @@ function InterlinearPanel({
               tabCopy={tabCopy}
               onCopied={onCopied}
               onGlossChange={(tokenIndex, value) => onGlossChange(b.line, tokenIndex, value)}
-              onOverride={onOverride}
+              editor={editor}
             />
           ))}
         </div>
@@ -107,7 +107,9 @@ function InterlinearPanel({
           </Button>
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{t('hintInterlinear')}</p>
+      <p className="text-xs text-muted-foreground">
+        {t(direction === 'y2h' ? 'hintInterlinearY2H' : 'hintInterlinear')}
+      </p>
       {/* 글로스 모드 안내 — hintInterlinear 대체 아님 (카드 복사 안내는 여전히 유효, §3) */}
       {glossEnabled && <p className="text-xs text-muted-foreground">{t('hintGloss')}</p>}
     </section>
