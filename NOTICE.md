@@ -9,7 +9,10 @@
 
 ## 頻度データの出典
 
-`data/syllable-freq.json` は **[FrequencyWords](https://github.com/hermitdave/FrequencyWords)**（© Hermit Dave、コンテンツは [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)）の韓国語単語頻度リスト（OpenSubtitles2018 に基づく）を加工して作成しました。加工内容は [data/README.md](data/README.md) を参照してください。
+`data/syllable-freq.json` は次の 2 つを加工して作成しました。加工内容は [data/README.md](data/README.md) を参照してください。
+
+- **韓国語版ウィキペディア**（© ウィキペディアの執筆者、[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)）— [kowikitext](https://github.com/lovit/kowikitext)（lovit）が 2020-09-20 のダンプから作成したテキストを使用
+- **[FrequencyWords](https://github.com/hermitdave/FrequencyWords)**（© Hermit Dave、コンテンツは [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)）— OpenSubtitles2018 に基づく韓国語単語頻度リスト `ko_full.txt`
 
 ## 同梱しているオープンソースソフトウェア
 

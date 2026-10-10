@@ -25,9 +25,10 @@ describe('Plain 출력 — 줄·공백 보존', () => {
   const TEXT = 'hankwuk  salam\n\ncenel\tilkessta';
 
   test('후보를 고른 뒤에도 빈 줄·연속 공백·탭이 그대로', () => {
-    const overrides = new Map([['cenel', '저널']]);
-    assert.equal(plain(TEXT), '한국  사람\n\n전얼\t읽었다');
-    assert.equal(plain(TEXT, { overrides }), '한국  사람\n\n저널\t읽었다');
+    // 예전 공유 URL의 선택(override) — 1위가 아닌 후보를 골라 둔 경우
+    const overrides = new Map([['cenel', '전얼']]);
+    assert.equal(plain(TEXT), '한국  사람\n\n저널\t읽었다');
+    assert.equal(plain(TEXT, { overrides }), '한국  사람\n\n전얼\t읽었다');
   });
 
   test('예문 번호는 내용이 있는 줄에만, 빈 줄은 유지', () => {
