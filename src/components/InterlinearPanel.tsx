@@ -1,7 +1,10 @@
 // 인터리니어 패널 (설계 문서 §4.4)
 // interlinear=true면 입력이 비어도 타이틀+힌트만 표시 (베이스라인과 동일).
 // 줄(splitLines)당 InterlinearBlock 1개 — y2h는 토큰별 후보 5개 + override 반영.
+// 대량 입력(파일 드롭 등)은 앞쪽 일부만 그린다 — 수천 장의 카드가 타이핑마다 다시 그려져 입력이 멈추던 문제
+import { memo, useState } from 'react';
 import InterlinearBlock from './InterlinearBlock';
+import { Button } from './ui/button';
 import { useI18n } from '@/hooks/useI18n';
 import { pickPreferred } from '@/lib/convert-pipeline';
 import { convert } from '../converter/h2y.js';
@@ -20,11 +23,17 @@ export interface InterlinearPanelProps {
   glossEnabled: boolean;
   glosses: ReadonlyMap<string, string[]>;
   tabCopy: boolean; // タブ区切り — 카드 복사의 탭 치환 여부 (Block에 전달)
+  // 빈도 데이터 로드 횟수 — 후보가 props 밖(엔진 상태)에서 바뀌므로 memo를 무효화하는 용도로만 받는다
+  dataVersion: number;
+  onCopied?(): void; // 카드 복사 시 호출 (히스토리 확정용)
   onGlossChange(lineKey: string, tokenIndex: number, value: string): void;
   onOverride(word: string, hangul: string): void;
 }
 
-export default function InterlinearPanel({
+// 처음에 그리는 최대 줄 수 (변환 결과 textarea에는 항상 전문이 있다)
+const INITIAL_BLOCKS = 100;
+
+function InterlinearPanel({
   visible,
   direction,
   lines,
@@ -35,15 +44,18 @@ export default function InterlinearPanel({
   glossEnabled,
   glosses,
   tabCopy,
+  onCopied,
   onGlossChange,
   onOverride,
 }: InterlinearPanelProps) {
   const { t } = useI18n();
+  const [showAll, setShowAll] = useState(false);
   if (!visible) return null;
 
+  const hidden = showAll ? 0 : Math.max(0, lines.length - INITIAL_BLOCKS);
   // 빈도 데이터 로드(freqVersion) 등 props 외 요인으로 후보가 바뀌므로
-  // 의도적으로 useMemo 없이 매 렌더 계산 (원본 updateAll과 동일 타이밍)
-  const blocks = lines.map((line) => {
+  // 의도적으로 useMemo 없이 매 렌더 계산 (원본 updateAll과 동일 타이밍. 후보는 엔진이 캐시)
+  const blocks = lines.slice(0, lines.length - hidden).map((line) => {
     const tokens = line.split(/\s+/).filter(Boolean);
     let romas: string[];
     let candidatesByWord: YaleCandidate[][] | null = null;
@@ -80,10 +92,19 @@ export default function InterlinearPanel({
               glossEnabled={glossEnabled}
               gloss={b.gloss}
               tabCopy={tabCopy}
+              onCopied={onCopied}
               onGlossChange={(tokenIndex, value) => onGlossChange(b.line, tokenIndex, value)}
               onOverride={onOverride}
             />
           ))}
+        </div>
+      )}
+      {hidden > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span>{t('interlinearTruncated').replace('{n}', String(hidden))}</span>
+          <Button variant="outline" size="sm" onClick={() => setShowAll(true)}>
+            {t('showAll')}
+          </Button>
         </div>
       )}
       <p className="text-xs text-muted-foreground">{t('hintInterlinear')}</p>
@@ -92,3 +113,6 @@ export default function InterlinearPanel({
     </section>
   );
 }
+
+// props가 그대로면 다시 그리지 않는다 (App은 lines를 useDeferredValue로 넘기고 콜백 참조를 고정)
+export default memo(InterlinearPanel);

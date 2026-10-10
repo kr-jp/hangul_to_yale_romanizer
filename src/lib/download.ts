@@ -34,6 +34,7 @@ export interface BackupArgs {
   format: OutputFormat;
   numbered: boolean;
   glossEnabled: boolean;
+  keepHyphens: boolean;
   input: string;
   output: string;
   wordOverrides: ReadonlyMap<string, string>;
@@ -43,6 +44,7 @@ export interface BackupArgs {
 
 // 백업 JSON 객체 생성 — 키 순서는 §4.6 사양 그대로 (JSON.stringify가 삽입 순서를 보존)
 // Stage 5: glossEnabled/glosses는 additive — 기존 키 순서 불변, version 1 유지 (§2.5)
+// 2026-10: keepHyphens도 additive (options 끝에 추가)
 export function buildBackup(args: BackupArgs) {
   return {
     version: 1,
@@ -57,6 +59,7 @@ export function buildBackup(args: BackupArgs) {
       format: args.format,
       exampleNumbering: args.numbered,
       glossEnabled: args.glossEnabled,
+      keepHyphens: args.keepHyphens,
     },
     input: args.input,
     output: args.output,

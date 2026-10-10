@@ -15,6 +15,11 @@ describe('convert (한글 → Yale)', () => {
     assert.equal(convert(null), '');
   });
 
+  test('분해형(NFD) 한글도 완성형과 같은 결과', () => {
+    assert.equal(convert('한국어'.normalize('NFD')), 'hankwuke');
+    assert.equal(convert('꽃이 피었다'.normalize('NFD')), 'kkochi phiessta');
+  });
+
   test('양순음 규칙 ON: ㅁㅂㅃㅍ 뒤 ㅜ → 표기 u', () => {
     assert.equal(convert('부'), 'pu'); // ㅂ + ㅜ → pu (ㅡ로 처리됨)
     assert.equal(convert('무'), 'mu');

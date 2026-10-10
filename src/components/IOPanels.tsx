@@ -13,13 +13,26 @@ import type { Direction, OutputFormat } from '@/lib/types';
 // 파일 DnD 업로드 상한 (원본 dom.js MAX_UPLOAD_BYTES)
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
+// 텍스트 파일만 받는다 — 이미지 등을 텍스트로 읽어 입력란에 바이너리가 쏟아지던 문제 수정.
+// 확장자·MIME은 OS마다 비어 있기도 해서, 알려진 바이너리 MIME을 거르고 앞부분의 NUL 바이트로 판정
+// (UTF-16 텍스트는 NUL을 포함하므로 BOM이 있으면 텍스트로 본다)
+const BINARY_MIME = /^(image|audio|video|font)\/|^application\/(pdf|zip|gzip|octet-stream|msword|vnd\.)/;
+async function isTextFile(file: File): Promise<boolean> {
+  if (BINARY_MIME.test(file.type)) return false;
+  const head = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
+  const utf16Bom = (head[0] === 0xff && head[1] === 0xfe) || (head[0] === 0xfe && head[1] === 0xff);
+  return utf16Bom || !head.includes(0);
+}
+
 interface IOPanelsProps {
   direction: Direction;
   input: string;
   onInputChange(v: string): void;
   output: string;
+  pending?: boolean; // 대량 입력을 Worker가 변환하는 중 (출력은 직전 결과)
   format: OutputFormat;
   tabCopy: boolean; // タブ区切り — 출력 선택 자동복사의 탭 치환 여부
+  onCopied?(): void; // 자동복사 시 호출 (히스토리 확정용)
 }
 
 // keyup 자동복사 트리거: Shift 동반 / Arrow* / Cmd·Ctrl+A (원본 dom.js와 동일)
@@ -28,7 +41,16 @@ function isSelectionKeyUp(e: React.KeyboardEvent): boolean {
   return e.shiftKey || key.startsWith('Arrow') || (key.toLowerCase() === 'a' && (e.metaKey || e.ctrlKey));
 }
 
-export default function IOPanels({ direction, input, onInputChange, output, format, tabCopy }: IOPanelsProps) {
+export default function IOPanels({
+  direction,
+  input,
+  onInputChange,
+  output,
+  pending = false,
+  format,
+  tabCopy,
+  onCopied,
+}: IOPanelsProps) {
   const { t } = useI18n();
   // 원본과 동일하게 입력/출력 공용 타이머 1개 (10ms 디바운스)
   const autoCopyTimer = useRef<number | undefined>(undefined);
@@ -47,14 +69,18 @@ export default function IOPanels({ direction, input, onInputChange, output, form
     setDragOver(false);
   }
 
-  // drop: 첫 파일만. 5MB 초과 → fileTooLarge. 확장자·MIME 제한 없음 (§8-4)
-  function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
+  // drop: 첫 파일만. 5MB 초과 → fileTooLarge, 텍스트가 아니면 fileNotText
+  async function handleDrop(e: React.DragEvent<HTMLTextAreaElement>) {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer?.files?.[0];
     if (!file) return;
     if (file.size > MAX_UPLOAD_BYTES) {
       toast(t('fileTooLarge'), { duration: 2000 });
+      return;
+    }
+    if (!(await isTextFile(file))) {
+      toast(t('fileNotText'), { duration: 3000 });
       return;
     }
     const reader = new FileReader();
@@ -72,6 +98,7 @@ export default function IOPanels({ direction, input, onInputChange, output, form
       const sel = e > s ? el.value.slice(s, e) : '';
       if (!sel) return;
       const text = format === 'plain' && tabCopy ? sel.replace(/[^\S\r\n]+/g, '\t') : sel;
+      onCopied?.();
       void copyText(text).then(() => toast(t('copied'), { duration: 2000 }));
     }, 10);
   }
@@ -103,12 +130,13 @@ export default function IOPanels({ direction, input, onInputChange, output, form
               onDragEnter={handleDragOver}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              onDrop={(e) => void handleDrop(e)}
             />
           </div>
           <div className="flex min-h-0 flex-col">
             <Label htmlFor="output" className="shrink-0 text-muted-foreground">
               {t(isY2H ? 'labelOutputY2H' : 'labelOutput')}
+              {pending && <span className="ml-2 animate-pulse text-xs">{t('converting')}</span>}
             </Label>
             <Textarea
               id="output"

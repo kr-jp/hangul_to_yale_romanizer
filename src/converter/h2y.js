@@ -42,7 +42,8 @@ export function joinWithSep(tokens, sep) {
 
 export function convert(text, { labial = true, sep = '' } = {}) {
   if (!text || !text.trim()) return '';
-  let jamo = toJamo(text);
+  // 분해형(NFD) 한글(macOS·PDF에서 복사한 텍스트 등)은 완성형으로 합친 뒤 변환
+  let jamo = toJamo(text.normalize('NFC'));
   if (labial) jamo = applyLabialRule(jamo);
   const tokens = tokenizeYale(jamo);
   return joinWithSep(tokens, sep);

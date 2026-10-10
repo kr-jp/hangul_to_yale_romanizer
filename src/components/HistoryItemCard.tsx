@@ -1,6 +1,7 @@
 // 히스토리 항목 카드 — dom.js renderHistory의 항목 렌더 1:1 이식 (설계 문서 §4.8)
-// 배지 순서: 타임스탬프 → PIN → sep: → labial:. 도구 라벨은 하드코딩 유지 (§6)
+// 배지 순서: 변환 방향 → 타임스탬프 → 고정 → sep: → labial:. sep:·labial: 배지는 기술 표기라 하드코딩 유지 (§6)
 import { useI18n } from '@/hooks/useI18n';
+import { historyDirection } from '@/lib/storage';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import type { HistoryItem } from '@/lib/types';
@@ -36,8 +37,9 @@ export default function HistoryItemCard({
   return (
     <div className="space-y-2 rounded-lg border border-border bg-card p-3 shadow-sm">
       <div className="flex flex-wrap items-center gap-1">
+        <Badge variant="secondary">{historyDirection(item) === 'y2h' ? 'Yale → 한글' : '한글 → Yale'}</Badge>
         <Badge variant="outline">{new Date(item.id).toLocaleString()}</Badge>
-        {item.pinned && <Badge>PIN</Badge>}
+        {item.pinned && <Badge>{t('histPinned')}</Badge>}
         <Badge variant="secondary" className="font-mono">{'sep:' + (item.opts.sep || '∅')}</Badge>
         <Badge variant="secondary" className="font-mono">
           {item.opts.labial ? 'labial:on' : 'labial:off'}
@@ -53,7 +55,7 @@ export default function HistoryItemCard({
             {tag}
             <button
               type="button"
-              aria-label={`Remove tag ${tag}`}
+              aria-label={`${t('histRemoveTag')}: ${tag}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onRemoveTag(tag);
@@ -72,18 +74,18 @@ export default function HistoryItemCard({
           }}
           className="inline-flex items-center rounded-md border border-dashed border-border px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          + tag
+          {t('histAddTag')}
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         <Button variant="outline" size="sm" onClick={onRestore}>
-          Restore
+          {t('histRestore')}
         </Button>
         <Button variant="outline" size="sm" onClick={onTogglePin}>
-          {item.pinned ? 'Unpin' : 'Pin'}
+          {item.pinned ? t('histUnpin') : t('histPin')}
         </Button>
         <Button variant="outline" size="sm" onClick={onDelete}>
-          Delete
+          {t('histDelete')}
         </Button>
       </div>
     </div>

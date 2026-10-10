@@ -27,11 +27,42 @@ export function decodeShareState(search: string): ShareState | null {
   const s = params.get('s');
   if (!s) return null;
   try {
-    return JSON.parse(b64UrlDecode(s)) as ShareState;
+    return sanitizeShareState(JSON.parse(b64UrlDecode(s)));
   } catch (err) {
     console.warn('[Yale] URL 공유 데이터 파싱 실패:', err);
     return null;
   }
+}
+
+// 외부에서 온 값이므로 형태를 강제한다 — 문자열이어야 할 i·s가 숫자 등이면 렌더링 중 예외로 화면이 비던 문제.
+// d·f의 값 검증(무효면 현재 설정 유지)은 APPLY_SHARE가 맡는다
+export function sanitizeShareState(raw: unknown): ShareState | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const str = (v: unknown) => (typeof v === 'string' ? v : '');
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    !!v && typeof v === 'object' && !Array.isArray(v);
+  const out: ShareState = {
+    d: r.d as ShareState['d'],
+    i: str(r.i),
+    l: !!r.l,
+    s: str(r.s),
+    se: !!r.se,
+    il: !!r.il,
+    f: r.f as ShareState['f'],
+    n: !!r.n,
+  };
+  if (isRecord(r.o)) {
+    out.o = Object.fromEntries(Object.entries(r.o).filter(([, v]) => typeof v === 'string')) as Record<string, string>;
+  }
+  if (r.ge) out.ge = true;
+  if (isRecord(r.g)) {
+    const g: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(r.g)) if (Array.isArray(v)) g[k] = v.map((x) => String(x ?? ''));
+    out.g = g;
+  }
+  if (r.h) out.h = true;
+  return out;
 }
 
 export function buildShareUrl(s: ShareState): string {

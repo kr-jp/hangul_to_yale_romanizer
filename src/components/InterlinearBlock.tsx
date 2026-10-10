@@ -1,5 +1,5 @@
 // 인터리니어 블록 — 윗줄 원문 토큰, 아랫줄 변환 (설계 문서 §4.4)
-// 카드 클릭 = formatSingleGlossedExample 결과 복사(탭 치환 없음, §4.2 — 글로스 없으면 내부 위임으로 현행과 바이트 동일).
+// 카드 클릭 = formatSingleGlossedExample 결과 복사(Plain + タブ区切り ON이면 공백→탭, 글로스 없으면 내부 위임으로 현행과 바이트 동일).
 // y2h 모호어(후보>1)는 Popover로 후보 교체 — 클릭이 카드 복사로 버블되지 않게 차단.
 // 글로스 모드(Stage 5 §2.1): 어절-컬럼 레이아웃 + 어절별 글로스 input. off면 현행 2행 그대로.
 import { Fragment, useState } from 'react';
@@ -22,6 +22,7 @@ export interface InterlinearBlockProps {
   glossEnabled: boolean;
   gloss: string[]; // 토큰 수로 패딩 완료본 (Panel이 부착·패딩 — gloss-format은 길이 방어 안 함)
   tabCopy: boolean; // タブ区切り — Plain 복사 시 공백→탭 치환 (메인 복사 버튼과 통일)
+  onCopied?(): void; // 카드 복사 시 호출 (히스토리 확정용)
   onOverride(word: string, hangul: string): void;
   onGlossChange(tokenIndex: number, value: string): void; // Panel이 lineKey 커링
 }
@@ -103,6 +104,7 @@ export default function InterlinearBlock({
   glossEnabled,
   gloss,
   tabCopy,
+  onCopied,
   onOverride,
   onGlossChange,
 }: InterlinearBlockProps) {
@@ -116,6 +118,7 @@ export default function InterlinearBlock({
       exampleIndex: index,
     });
     const text = format === 'plain' && tabCopy ? raw.replace(/[^\S\r\n]+/g, '\t') : raw;
+    onCopied?.();
     void copyText(text).then(() => toast(t('copied'), { duration: 2000 }));
   };
 

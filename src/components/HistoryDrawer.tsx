@@ -1,6 +1,7 @@
 // 히스토리 드로어 — dom.js renderHistory/renderTagFilter의 1:1 이식 (설계 문서 §4.8)
 // 검색어·활성태그는 컴포넌트 로컬 state. Sheet(modal)로 내부 클릭 시 닫힘 버그를 구조적으로 차단
-import { useEffect, useState } from 'react';
+// '모두 지우기'는 2단계 확인 (한 번 누르면 확인 문구로 바뀌고, 4초 안에 다시 눌러야 삭제)
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { useHistory } from '@/hooks/useHistory';
 import HistoryItemCard from './HistoryItemCard';
@@ -21,11 +22,16 @@ export default function HistoryDrawer({ open, onOpenChange, onRestore }: History
   const { items, allTags, refresh, togglePin, remove, clear, addTag, removeTag } = useHistory();
   const [query, setQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const confirmTimer = useRef<number | undefined>(undefined);
 
   // 열 때마다 localStorage에서 다시 읽기 (디바운스 자동 기록분 반영 — 원본 openHist 시 renderHistory와 동일)
   useEffect(() => {
     if (open) refresh();
+    setConfirmClear(false);
   }, [open, refresh]);
+
+  useEffect(() => () => window.clearTimeout(confirmTimer.current), []);
 
   // 검색 부분일치 + 태그 단일 필터 AND 결합 (§4.8)
   const q = query.trim().toLowerCase();
@@ -35,8 +41,15 @@ export default function HistoryDrawer({ open, onOpenChange, onRestore }: History
     return true;
   });
 
-  // 모두 지우기: 히스토리 비우기 + 검색어·활성태그 리셋 (§4.8)
+  // 모두 지우기: 첫 클릭은 확인 요청, 확인 상태에서 다시 누르면 히스토리 비우기 + 검색어·활성태그 리셋 (§4.8)
   const handleClear = () => {
+    window.clearTimeout(confirmTimer.current);
+    if (!confirmClear) {
+      setConfirmClear(true);
+      confirmTimer.current = window.setTimeout(() => setConfirmClear(false), 4000);
+      return;
+    }
+    setConfirmClear(false);
     clear();
     setQuery('');
     setActiveTag(null);
@@ -48,9 +61,11 @@ export default function HistoryDrawer({ open, onOpenChange, onRestore }: History
         <SheetHeader>
           <SheetTitle>{t('ttlHist')}</SheetTitle>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={handleClear}>
-              {t('clearHist')}
-            </Button>
+            {items.length > 0 && (
+              <Button variant={confirmClear ? 'destructive' : 'ghost'} size="sm" onClick={handleClear}>
+                {confirmClear ? t('confirmClearHist') : t('clearHist')}
+              </Button>
+            )}
             <SheetCloseButton aria-label={t('closeHist')} />
           </div>
         </SheetHeader>

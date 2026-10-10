@@ -1,5 +1,6 @@
-// 옵션 행 — 스위치 5종 + 구분자 컨트롤 (설계 문서 §1, Stage 5 §2.1)
+// 옵션 행 — 스위치 + 구분자 컨트롤 (설계 문서 §1, Stage 5 §2.1)
 // sepEnabled 스위치는 y2h에서 숨김. SeparatorControls는 h2y && sepEnabled일 때만 표시 (§4.10, §4.12)
+// keepHyphens(형태소 경계 '-' 표시) 스위치는 y2h에서만 표시 (2026-10-10)
 import { Switch } from './ui/switch';
 import { Label } from './ui/label';
 import SeparatorControls from './SeparatorControls';
@@ -14,6 +15,7 @@ type OptionPatch = Partial<{
   sepChar: string;
   glossEnabled: boolean;
   tabCopy: boolean;
+  keepHyphens: boolean;
 }>;
 
 interface OptionRowProps {
@@ -25,6 +27,7 @@ interface OptionRowProps {
   sepChar: string;
   glossEnabled: boolean;
   tabCopy: boolean;
+  keepHyphens: boolean;
   onChange(patch: OptionPatch): void;
 }
 
@@ -37,6 +40,7 @@ export default function OptionRow({
   sepChar,
   glossEnabled,
   tabCopy,
+  keepHyphens,
   onChange,
 }: OptionRowProps) {
   const { t } = useI18n();
@@ -87,6 +91,18 @@ export default function OptionRow({
             {t('labelTabCopy')}
           </Label>
         </div>
+        {!showSep && (
+          <div className="flex items-center gap-2">
+            <Switch
+              id="optKeepHyphens"
+              checked={keepHyphens}
+              onCheckedChange={(v) => onChange({ keepHyphens: v })}
+            />
+            <Label htmlFor="optKeepHyphens" className="cursor-pointer">
+              {t('labelKeepHyphens')}
+            </Label>
+          </div>
+        )}
         {showSep && (
           <div className="flex items-center gap-2">
             <Switch
