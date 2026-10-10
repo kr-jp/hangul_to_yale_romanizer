@@ -59,30 +59,38 @@ describe('공범주·지표 표기', () => {
   });
 });
 
-describe('사용자 사전 (탐욕 폴백)', () => {
+// 예시는 표준 Yale에서 빈도 데이터가 1위를 틀리는 어형 — 사전으로 바로잡는 전형적인 경우
+describe('사용자 사전 (빈도 데이터 주입)', () => {
+  before(() => {
+    const data = JSON.parse(readFileSync(join(__dirname, '..', 'data', 'syllable-freq.json'), 'utf8'));
+    setFrequencyData({ syllable: data.u, bigram: data.b, word: data.w });
+  });
+  after(() => setFrequencyData({}));
+
   test('형태소 항목은 다른 어절 안에서도 쓰인다', () => {
-    const d = dict({}, { hakseng: '학생' });
-    assert.equal(reverseConvert('hakseng-i hakseng-tul-ul', { dict: d }), '학생이 학생들을');
-    assert.equal(reverseConvert('hakseng-i', { dict: d, keepHyphens: true }), '학생-이');
-    assert.equal(reverseConvert('hakseng', { dict: d }), '학생');
+    const d = dict({}, { tuli: '드리' }); // 엔진 1위는 들이
+    assert.equal(reverseConvert('tuli-ess-ta tuli-ko', { dict: d }), '드리었다 드리고');
+    assert.equal(reverseConvert('tuli-ess-ta', { dict: d, keepHyphens: true }), '드리-었-다');
+    assert.equal(reverseConvert('tuli', { dict: d }), '드리');
   });
 
   test('어절 항목(구간별 값): 종성 결합·하이픈 표시는 평소대로', () => {
-    const d = dict({ 'yeppu-n': '예쁘-ㄴ' });
-    assert.equal(reverseConvert('yeppu-n', { dict: d }), '예쁜');
-    assert.equal(reverseConvert('yeppu-n', { dict: d, keepHyphens: true }), '예쁘-ㄴ');
-    assert.equal(reverseConvert('(yeppu-n)', { dict: d }), '(예쁜)');
+    const d = dict({ 'aphu-n': '아프-ㄴ' }); // 엔진 1위는 앞은
+    assert.equal(reverseConvert('aphu-n', { dict: d }), '아픈');
+    assert.equal(reverseConvert('aphu-n', { dict: d, keepHyphens: true }), '아프-ㄴ');
+    assert.equal(reverseConvert('(aphu-n)', { dict: d }), '(아픈)');
   });
 
   test('어절 항목(구간 수가 다른 값): 값 그대로', () => {
-    const d = dict({ 'yeppu-n': '예쁜' });
-    assert.equal(reverseConvert('yeppu-n', { dict: d, keepHyphens: true }), '예쁜');
+    const d = dict({ 'aphu-n': '아픈' });
+    assert.equal(reverseConvert('aphu-n', { dict: d, keepHyphens: true }), '아픈');
   });
 
   test('어절 항목은 어절 전체가 같을 때만', () => {
+    // 문헌 고유 표기: 네(표준 Yale은 ney)를 ne로 쓰는 경우. 표준 Yale의 ne(너)가 든 형태소에는 영향 없음
     const d = dict({ ne: '네' });
     assert.equal(reverseConvert('ne kes', { dict: d }), '네 것');
-    assert.equal(reverseConvert('mek-ess-ne', { dict: d }), '먹었너');
+    assert.equal(reverseConvert('ne-nun', { dict: d }), '너는');
   });
 
   test('어절 항목이 형태소 항목보다 우선', () => {
@@ -131,8 +139,8 @@ describe('후보의 구간별 출력(parts)·사전 표시 (빈도 데이터 주
   });
 
   test('값 그대로 쓰는 어절 항목은 parts 없음', () => {
-    const [c] = parseYaleWordCandidates('yeppu-n,', { dict: dict({ 'yeppu-n': '예쁜' }) });
-    assert.deepEqual([c.hangul, c.parts, c.dict], ['예쁜,', null, true]);
+    const [c] = parseYaleWordCandidates('aphu-n,', { dict: dict({ 'aphu-n': '아픈' }) });
+    assert.deepEqual([c.hangul, c.parts, c.dict], ['아픈,', null, true]);
   });
 });
 
@@ -150,6 +158,6 @@ describe('토큰 구성 (사전 학습용)', () => {
   });
 
   test('yaleRunsIn', () => {
-    assert.deepEqual(yaleRunsIn('hakseng-i (ku) 1992').map((r) => r.key), ['hakseng-i', 'ku']);
+    assert.deepEqual(yaleRunsIn('tuli-ess-ta (ku) 1992').map((r) => r.key), ['tuli-ess-ta', 'ku']);
   });
 });

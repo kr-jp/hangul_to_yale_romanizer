@@ -1,6 +1,6 @@
 // 사용자 사전 — 후보 창에서 고르거나 직접 입력한 변환을 기억해 Yale→한글 변환에 우선 적용한다 (2026-10)
 //  - morphemes(형태소): '-'·'.'로 나뉜 구간 하나가 키와 같으면 그 구간을 값으로
-//    (hakseng → 학생이면 hakseng-i, hakseng-ul 모두 적용)
+//    (mali → 마리면 Mali-nun, Mali-ka 모두 적용)
 //  - words(어절): 어절의 Yale 부분 전체가 키와 같을 때만. 값이 구간 수만큼 '-'로 나뉘어 있으면 구간별 값
 //    (하이픈 표시·종성 결합은 평소대로), 아니면 값 문자열 그대로
 // 키는 소문자 Yale. 실제 적용은 엔진(y2h.js rankRun)이 opts.dict로 받아서 한다
@@ -141,7 +141,8 @@ export function describeToken(token: string, opts: ConvertOpts): TokenEditInfo |
 // 고친 결과 → 사전 변경. value = 후보 창에서 고른 후보, 또는 직접 입력한 문자열(Yale 본체 부분의 한글).
 // - 엔진 결과(사전 없이)로 되돌린 것이면 이 토큰에 쓰인 항목을 지운다
 // - 구간별로 맞출 수 있고, 바뀐 구간이 모두 2음절 이상이거나 원래 변환되지 않던 구간(John 등)이면
-//   형태소 항목으로 — 다른 어절에서도 쓰인다. 1음절 형태소(ki → 키 등)는 표준 Yale과 충돌하기 쉬워 어절 항목으로
+//   형태소 항목으로 — 다른 어절에서도 쓰인다. 1음절 형태소는 표준 Yale과 충돌하기 쉬워 어절 항목으로
+//   (khi(키)를 ki로 쓰는 문헌의 ki → 키를 형태소로 기억하면 표준 Yale의 ki(기)까지 바뀐다)
 // - 그 밖(구간 수가 다르게 입력, 자음 형태소를 바꿈 등)은 어절 항목
 // 바뀐 것이 없으면 null
 export function learnCorrection(
@@ -210,7 +211,7 @@ export function learnCorrection(
   return { add: [{ scope: 'words', key: info.key, value: parts.join('-') }], remove: [] };
 }
 
-// 토스트용 요약: "hakseng → 학생, ki-ka → 키-가"
+// 토스트용 요약: "mali → 마리, aphu-n → 아프-ㄴ"
 export function summarizeEntries(entries: { key: string; value?: string }[]): string {
   return entries.map((e) => (e.value === undefined ? e.key : `${e.key} → ${e.value}`)).join(', ');
 }

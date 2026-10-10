@@ -35,16 +35,18 @@ describe('고친 결과 → 사전 항목 (learnCorrection)', () => {
   });
 
   test('직접 입력: 하이픈으로 나눈 형태는 형태소별로', () => {
-    assert.deepEqual(learnCorrection('hakseng-i', '학생-이', opts()), morpheme('hakseng', '학생'));
+    assert.deepEqual(learnCorrection('tuli-ess-ta', '드리-었-다', opts()), morpheme('tuli', '드리'));
   });
 
   test('1음절 형태소는 어절 항목 (표준 Yale과 충돌하기 쉬움)', () => {
+    // 문헌 고유 표기를 고치는 경우: 키(표준 khi)를 ki로, 네(표준 ney)를 ne로 쓴 문헌.
+    // 형태소로 기억하면 표준 Yale의 ki(기)·ne(너)까지 바뀌므로 그 어절에만
     assert.deepEqual(learnCorrection('ki-ka', '키-가', opts()), word('ki-ka', '키-가'));
     assert.deepEqual(learnCorrection('ne', '네', opts()), word('ne', '네'));
   });
 
   test('하이픈 없이 입력하면 어절 항목(값 그대로)', () => {
-    assert.deepEqual(learnCorrection('yeppu-n', '예쁜', opts()), word('yeppu-n', '예쁜'));
+    assert.deepEqual(learnCorrection('aphu-n', '아픈', opts()), word('aphu-n', '아픈'));
   });
 
   test('변환되지 않던 구간(영어 이름)은 1음절이어도 형태소 항목', () => {
@@ -61,7 +63,7 @@ describe('고친 결과 → 사전 항목 (learnCorrection)', () => {
   });
 
   test('바뀐 것이 없거나 받을 수 없는 값이면 null', () => {
-    assert.equal(learnCorrection('hakseng-i', '학성-이', opts()), null);
+    assert.equal(learnCorrection('tuli-ess-ta', '들이-었-다', opts()), null);
     assert.equal(learnCorrection('ka', '가 나', opts()), null); // 공백
     assert.equal(learnCorrection('ka', '   ', opts()), null);
     assert.equal(learnCorrection('123', '일이삼', opts()), null); // Yale run 없음
@@ -98,24 +100,24 @@ describe('고친 결과 → 사전 항목 (learnCorrection)', () => {
     });
     const d = dict({}, { mali: '마리' });
     assert.deepEqual(describeToken('Mali-ka', opts(d)).hits, [{ scope: 'morphemes', key: 'mali', value: '마리' }]);
-    assert.equal(describeToken('yeppu-n', opts(dict({ 'yeppu-n': '예쁜' }))).prefill, '예쁜');
+    assert.equal(describeToken('aphu-n', opts(dict({ 'aphu-n': '아픈' }))).prefill, '아픈');
     assert.equal(describeToken('1992', opts()), null);
   });
 });
 
 describe('사전 데이터 처리', () => {
   test('isEditableToken', () => {
-    assert.ok(isEditableToken('hakseng-i,'));
+    assert.ok(isEditableToken('tuli-ess-ta,'));
     assert.ok(!isEditableToken('-'));
     assert.ok(!isEditableToken('-(u)n'));
   });
 
   test('dictFromJSON: 잘못된 키·값은 버린다', () => {
     const d = dictFromJSON({
-      words: { 'Ki-Ka': ' 키-가 ', 'ka ka': '가가', '-ko': '고', ok: 1 },
-      morphemes: { hakseng: '학생', 'mali-nun': '마리는', __proto__x: '', empty: '', sp: '가 나', ['x'.repeat(3)]: '가'.repeat(61) },
+      words: { 'Aphu-N': ' 아프-ㄴ ', 'ka ka': '가가', '-ko': '고', ok: 1 },
+      morphemes: { mali: '마리', 'mali-nun': '마리는', __proto__x: '', empty: '', sp: '가 나', ['x'.repeat(3)]: '가'.repeat(61) },
     });
-    assert.deepEqual(dictToJSON(d), { words: { 'ki-ka': '키-가' }, morphemes: { hakseng: '학생' } });
+    assert.deepEqual(dictToJSON(d), { words: { 'aphu-n': '아프-ㄴ' }, morphemes: { mali: '마리' } });
     assert.deepEqual(dictToJSON(dictFromJSON('broken')), { words: {}, morphemes: {} });
     assert.deepEqual(dictToJSON(dictFromJSON(JSON.parse('{"morphemes":{"__proto__":"x"}}'))).morphemes, {});
   });
@@ -138,10 +140,10 @@ describe('사전 데이터 처리', () => {
   });
 
   test('entriesUsedIn: 입력 변환에 실제로 쓰인 항목만', () => {
-    const d = dict({ 'ki-ka': '키-가', ne: '네' }, { hakseng: '학생', mali: '마리', ka: '까' });
-    assert.deepEqual(dictToJSON(entriesUsedIn('hakseng-i ki-ka (ku) 1992', d)), {
-      words: { 'ki-ka': '키-가' }, // ki-ka 안의 ka는 어절 항목에 가려 쓰이지 않음
-      morphemes: { hakseng: '학생' },
+    const d = dict({ 'mali-ka': '마리-가', 'aphu-n': '아프-ㄴ' }, { tuli: '드리', mali: '머리', ka: '까' });
+    assert.deepEqual(dictToJSON(entriesUsedIn('tuli-ess-ta Mali-ka (ku) 1992', d)), {
+      words: { 'mali-ka': '마리-가' }, // Mali-ka 안의 mali·ka는 어절 항목에 가려 쓰이지 않음
+      morphemes: { tuli: '드리' },
     });
   });
 });
