@@ -3,6 +3,7 @@
 // y2h 아랫줄 어절은 WordPopover로 후보 선택·직접 입력(사용자 사전) — 클릭이 카드 복사로 버블되지 않게 차단.
 // 글로스 모드(Stage 5 §2.1): 어절-컬럼 레이아웃 + 어절별 글로스 input. off면 현행 2행 그대로.
 import { Fragment } from 'react';
+import { CopyIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import WordPopover from './WordPopover';
 import { useI18n } from '@/hooks/useI18n';
@@ -54,8 +55,25 @@ export default function InterlinearBlock({
     });
     const text = format === 'plain' && tabCopy ? raw.replace(/[^\S\r\n]+/g, '\t') : raw;
     onCopied?.();
-    void copyText(text).then(() => toast(t('copied'), { duration: 2000 }));
+    void copyText(text).then((ok) => toast(t(ok ? 'copied' : 'copyFailed'), { duration: 2000 }));
   };
+
+  // 키보드로도 예문을 복사할 수 있게 하는 버튼 — 카드 클릭은 마우스 전용이라 Tab으로는 닿지 않았다.
+  // 평소에는 숨기고, 마우스를 올리거나 포커스가 갔을 때만 보인다 (2행·컬럼 레이아웃 공용)
+  const copyButton = (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        handleCopy();
+      }}
+      aria-label={t('copyExample')}
+      title={t('copyExample')}
+      className="absolute right-1.5 top-1.5 inline-flex size-7 items-center justify-center rounded-md border border-border bg-card text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+    >
+      <CopyIcon className="size-3.5" />
+    </button>
+  );
 
   // y2h 아랫줄 1어절 — 고칠 수 있는 어절(Yale run 1개)·모호어는 WordPopover, 아니면 텍스트 (2행·컬럼 레이아웃 공용)
   const renderRoma = (i: number) => {
@@ -82,7 +100,7 @@ export default function InterlinearBlock({
     return (
       <div
         onClick={handleCopy}
-        className="cursor-pointer rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:border-ring hover:bg-accent/40"
+        className="group relative cursor-pointer rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:border-ring hover:bg-accent/40"
       >
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {tokens.map((tk, i) => {
@@ -120,12 +138,14 @@ export default function InterlinearBlock({
                   // size=4: field-sizing 미지원 브라우저에서 input 기본 고유폭(~20ch)이
                   // 컬럼을 부풀리지 않게 — 그 경우 min-w-full(컬럼 폭)만으로 동작
                   size={4}
-                  className="min-w-full [field-sizing:content] rounded-md border border-input bg-background px-1.5 py-0.5 font-mono text-[15px] leading-relaxed text-foreground placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  // 모바일은 16px (iOS Safari의 포커스 확대 방지 — ui/input과 같은 이유)
+                  className="min-w-full [field-sizing:content] rounded-md border border-input bg-background px-1.5 py-0.5 font-mono text-base leading-relaxed md:text-[15px] text-foreground placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>
             );
           })}
         </div>
+        {copyButton}
       </div>
     );
   }
@@ -133,7 +153,7 @@ export default function InterlinearBlock({
   return (
     <div
       onClick={handleCopy}
-      className="cursor-pointer rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:border-ring hover:bg-accent/40"
+      className="group relative cursor-pointer rounded-lg border border-border bg-card px-3.5 py-3 transition-colors hover:border-ring hover:bg-accent/40"
     >
       {/* H1: 줄별 언어에 맞춰 폰트 분리 — 윗줄(원문): h2y=한글 sans / y2h=Yale mono, 아랫줄은 반대 */}
       <div
@@ -161,6 +181,7 @@ export default function InterlinearBlock({
           romas.join(' ')
         )}
       </div>
+      {copyButton}
     </div>
   );
 }

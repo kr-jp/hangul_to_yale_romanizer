@@ -49,11 +49,13 @@ export default function OptionRow({
 
   return (
     <div className="space-y-3">
-      {/* L4: 모바일은 2칼럼 그리드로 정렬(ja의 ragged 래핑 해소). 균등 칼럼은 긴 라벨이 꺾여 content 폭 칼럼 사용 */}
+      {/* L4: 모바일은 2칼럼 그리드로 정렬(ja의 ragged 래핑 해소). 균등 칼럼은 긴 라벨이 꺾여 content 폭 칼럼 사용.
+          그래도 좁은 화면에서는 긴 라벨이 두 줄이 되므로 라벨 행간은 leading-snug (기본 leading-none은 두 줄이 붙는다),
+          줄 길이는 text-balance (마지막 한 글자만 다음 줄로 넘어가지 않게) */}
       <div className="grid grid-cols-[auto_auto] items-center justify-start gap-x-3 gap-y-3 md:flex md:flex-wrap md:gap-x-6">
         <div className="flex items-center gap-2">
           <Switch id="optLabial" checked={labial} onCheckedChange={(v) => onChange({ labial: v })} />
-          <Label htmlFor="optLabial" className="cursor-pointer">
+          <Label htmlFor="optLabial" className="cursor-pointer text-balance leading-snug">
             {t('labelLabial')}
           </Label>
         </div>
@@ -63,13 +65,13 @@ export default function OptionRow({
             checked={interlinear}
             onCheckedChange={(v) => onChange({ interlinear: v })}
           />
-          <Label htmlFor="optInterlinear" className="cursor-pointer">
+          <Label htmlFor="optInterlinear" className="cursor-pointer text-balance leading-snug">
             {t('labelInterlinear')}
           </Label>
         </div>
         <div className="flex items-center gap-2">
           <Switch id="optNumbered" checked={numbered} onCheckedChange={(v) => onChange({ numbered: v })} />
-          <Label htmlFor="optNumbered" className="cursor-pointer">
+          <Label htmlFor="optNumbered" className="cursor-pointer text-balance leading-snug">
             {t('labelExampleNum')}
           </Label>
         </div>
@@ -80,14 +82,14 @@ export default function OptionRow({
             checked={glossEnabled}
             onCheckedChange={(v) => onChange({ glossEnabled: v })}
           />
-          <Label htmlFor="optGloss" className="cursor-pointer">
+          <Label htmlFor="optGloss" className="cursor-pointer text-balance leading-snug">
             {t('labelGloss')}
           </Label>
         </div>
         {/* タブ区切り — 복사 시 공백→탭 치환 (기본 ON). OFF면 공백 유지. 영속화 (2026-06-12) */}
         <div className="flex items-center gap-2">
           <Switch id="optTabCopy" checked={tabCopy} onCheckedChange={(v) => onChange({ tabCopy: v })} />
-          <Label htmlFor="optTabCopy" className="cursor-pointer">
+          <Label htmlFor="optTabCopy" className="cursor-pointer text-balance leading-snug">
             {t('labelTabCopy')}
           </Label>
         </div>
@@ -98,7 +100,7 @@ export default function OptionRow({
               checked={keepHyphens}
               onCheckedChange={(v) => onChange({ keepHyphens: v })}
             />
-            <Label htmlFor="optKeepHyphens" className="cursor-pointer">
+            <Label htmlFor="optKeepHyphens" className="cursor-pointer text-balance leading-snug">
               {t('labelKeepHyphens')}
             </Label>
           </div>
@@ -110,7 +112,7 @@ export default function OptionRow({
               checked={sepEnabled}
               onCheckedChange={(v) => onChange({ sepEnabled: v })}
             />
-            <Label htmlFor="optSepEnable" className="cursor-pointer">
+            <Label htmlFor="optSepEnable" className="cursor-pointer text-balance leading-snug">
               {t('labelSep')}
             </Label>
           </div>

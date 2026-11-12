@@ -19,11 +19,13 @@ import { collectShareGlosses, getOpts, splitLines } from './lib/convert-pipeline
 import {
   historyDirection,
   isValidFormat,
+  readDirection,
   readFormat,
   readKeepHyphens,
   readTabCopy,
   readUserDictRaw,
   recordHistory,
+  writeDirection,
   writeFormat,
   writeKeepHyphens,
   writeTabCopy,
@@ -201,10 +203,11 @@ function allKeys(d: UserDict): { scope: DictScope; key: string }[] {
   ];
 }
 
-// 부팅: 기본값 구성 후 URL ?s= 가 있으면 APPLY_SHARE를 즉시 적용 (URL이 기본값·localStorage보다 우선)
+// 부팅: 기본값 구성 후 URL에 공유 데이터(#s=, 예전 링크는 ?s=)가 있으면 APPLY_SHARE를 즉시 적용
+// (URL이 기본값·localStorage보다 우선)
 function initAppState(): AppState {
   const base: AppState = {
-    direction: 'h2y',
+    direction: readDirection(),
     input: '',
     drafts: { h2y: '', y2h: '' },
     labial: true,
@@ -220,7 +223,7 @@ function initAppState(): AppState {
     glossEnabled: false,
     glosses: new Map(),
   };
-  const share = decodeShareState(window.location.search);
+  const share = decodeShareState(window.location.search, window.location.hash);
   return share ? appReducer(base, { type: 'APPLY_SHARE', share }) : base;
 }
 
@@ -237,6 +240,11 @@ export default function App() {
   useEffect(() => {
     writeFormat(state.format);
   }, [state.format]);
+
+  // 변환 방향 영속화 — 다시 열어도 마지막에 쓰던 방향 (format과 같이 공유 URL로 열었을 때도 기록)
+  useEffect(() => {
+    writeDirection(state.direction);
+  }, [state.direction]);
 
   // タブ区切り 설정 영속화
   useEffect(() => {
@@ -257,6 +265,7 @@ export default function App() {
     }
     if (!writeUserDictRaw(dictToJSON(userDict))) toast(t('dictSaveFailed'), { duration: 4000 });
     // 사전이 바뀔 때만 저장 (t는 언어 전환으로만 바뀐다)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userDict]);
 
   // y2h 진입 시 빈도 데이터 lazy load. 로드 완료 시 version 증가 → 출력 재계산
@@ -308,6 +317,7 @@ export default function App() {
     historyTimer.current = window.setTimeout(saveDraftToHistory, 500);
     return () => window.clearTimeout(historyTimer.current);
     // saveDraftToHistory는 매 렌더 새로 만들어지지만 결과는 아래 값으로만 정해진다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.input, opts.sep, opts.labial, state.direction]);
 
   // 결과를 사용한 시점(복사·다운로드·공유·방향 전환·복원)에 지금 입력을 확정 기록하고 세션을 끊는다.
@@ -327,10 +337,15 @@ export default function App() {
   // 메인 복사 버튼: plain + タブ区切り ON일 때만 공백 run → 탭 치환 (§4.2)
   const handleCopy = () => {
     if (blockWhilePending()) return;
+    // 출력이 비면 복사하지 않는다 (다운로드와 같다 — 예전에는 빈 문자열을 복사하고 '복사 완료'를 띄웠다)
+    if (!output) {
+      toast(t('noCopyContent'), { duration: 2000 });
+      return;
+    }
     const raw = output || '';
     const text = state.format === 'plain' && state.tabCopy ? raw.replace(/[^\S\r\n]+/g, '\t') : raw;
     commitHistory();
-    void copyText(text).then(() => toast(t('copied'), { duration: 2000 }));
+    void copyText(text).then((ok) => toast(t(ok ? 'copied' : 'copyFailed'), { duration: 2000 }));
   };
 
   // 현재 상태 → ShareState (§3.2). s는 유효 sep(getOpts 결과), o는 size > 0일 때만
@@ -407,7 +422,9 @@ export default function App() {
   // URL 공유 (§3): 현재 상태로 URL 생성 → 클립보드 복사 → 토스트
   const handleShare = () => {
     commitHistory();
-    void copyText(buildShareUrl(captureShare())).then(() => toast(t('shareCopied'), { duration: 2000 }));
+    void copyText(buildShareUrl(captureShare())).then((ok) =>
+      toast(t(ok ? 'shareCopied' : 'copyFailed'), { duration: 2000 }),
+    );
   };
 
   // 히스토리 복원: 기록된 방향·입력·구분자·양순음을 적용 (format 등 표시 설정은 불변)
@@ -423,6 +440,17 @@ export default function App() {
     commitRef.current = commitHistory;
   });
   const onCardCopied = useCallback(() => commitRef.current(), []);
+  // 앱이 열린 탭의 주소창에 다른 공유 링크(#s=)를 넣으면 프래그먼트만 바뀌어 페이지가 다시 로드되지 않으므로 여기서 적용
+  useEffect(() => {
+    const onHashChange = () => {
+      const share = decodeShareState('', window.location.hash);
+      if (!share) return;
+      commitRef.current();
+      dispatch({ type: 'APPLY_SHARE', share });
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   const onGlossChange = useCallback(
     (lineKey: string, tokenIndex: number, value: string) =>
       dispatch({ type: 'SET_GLOSS', lineKey, tokenIndex, value }),
@@ -525,7 +553,6 @@ export default function App() {
             onChange={(patch) => dispatch({ type: 'SET_OPTION', patch })}
           />
           <ActionBar
-            output={output}
             format={state.format}
             onFormatChange={(f) => dispatch({ type: 'SET_FORMAT', value: f })}
             onCopy={handleCopy}

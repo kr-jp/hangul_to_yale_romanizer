@@ -1,6 +1,5 @@
 // 대량 입력 변환 전용 Web Worker — 파일 드롭 등으로 수십만 자를 변환해도 화면이 멈추지 않게 한다.
 // 메인 스레드와 같은 엔진·같은 빈도 데이터를 쓰므로 결과는 동기 경로와 동일하다
-import freq from '../../data/syllable-freq.json';
 import { setFrequencyData } from '../converter/y2h.js';
 import { buildFormattedOutput } from './convert-pipeline';
 import type { ConvertOpts, Direction, OutputFormat, UserDict } from './types';
@@ -21,12 +20,25 @@ export interface ConvertResponse {
   output: string;
 }
 
-const data = freq as { u?: object; b?: object; w?: object };
-(setFrequencyData as (d: { syllable?: object | null; bigram?: object | null; word?: object | null }) => void)({
-  syllable: data.u || null,
-  bigram: data.b || null,
-  word: data.w || null,
-});
+// 빈도 데이터(약 1.1MB)는 Yale→한글 변환이 처음 올 때 내려받는다 — 정적 import였을 때는 Worker 번들에 통째로
+// 들어가, 한글→Yale 대량 입력에서도 받았다. 실패하면 메인 스레드와 같이 탐욕 파서로 변환 (다음 요청 때 다시 시도)
+let freqLoad: Promise<void> | null = null;
+function loadFrequencyData(): Promise<void> {
+  freqLoad ??= import('../../data/syllable-freq.json')
+    .then((mod) => {
+      const data = mod.default as { u?: object; b?: object; w?: object };
+      (setFrequencyData as (d: { syllable?: object | null; bigram?: object | null; word?: object | null }) => void)({
+        syllable: data.u || null,
+        bigram: data.b || null,
+        word: data.w || null,
+      });
+    })
+    .catch((err: unknown) => {
+      console.warn('[Yale] 빈도 데이터 로딩 실패, 기본 파서 사용:', err);
+      freqLoad = null;
+    });
+  return freqLoad;
+}
 
 const scope = self as unknown as {
   onmessage: ((e: MessageEvent<ConvertRequest>) => void) | null;
@@ -47,8 +59,9 @@ function stableDict(dict: UserDict | null | undefined): UserDict | null {
   return lastDict;
 }
 
-scope.onmessage = (e) => {
+scope.onmessage = async (e) => {
   const r = e.data;
+  if (r.direction === 'y2h') await loadFrequencyData();
   const opts = { ...r.opts, dict: stableDict(r.opts.dict) };
   const output = buildFormattedOutput(r.text, opts, r.format, r.numbered, r.direction, new Map(r.overrides), {
     enabled: r.gloss.enabled,

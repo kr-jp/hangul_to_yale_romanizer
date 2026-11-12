@@ -24,9 +24,10 @@ export default function HistoryItemCard({
   onRemoveTag,
 }: HistoryItemCardProps) {
   const { t } = useI18n();
-  // 원본과 동일: 첫 줄 80자, 말줄임표는 전체 텍스트 길이 기준
+  // 첫 줄 80자까지 보여 주고, 그 뒤에 내용이 더 있으면 말줄임표
+  // (예전에는 전체가 80자를 넘을 때만 붙여, 짧은 여러 줄 항목은 첫 줄이 전부인 것처럼 보였다)
   const firstLine = (item.text.split(/\r?\n/)[0] || '').slice(0, 80);
-  const body = firstLine + (item.text.length > 80 ? '…' : '');
+  const body = firstLine + (item.text.length > firstLine.length ? '…' : '');
 
   // window.prompt 그대로 유지 (1:1 보존). 빈 입력·취소는 무시 (§4.8)
   const handleAddTag = () => {

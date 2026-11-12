@@ -17,7 +17,6 @@ const FORMAT_ITEMS: ReadonlyArray<{ value: OutputFormat; label: string }> = [
 ];
 
 interface ActionBarProps {
-  output: string;
   format: OutputFormat;
   onFormatChange(f: OutputFormat): void;
   onCopy(): void;
@@ -58,8 +57,10 @@ export default function ActionBar({
       </Tooltip>
       {/* L1: ghost '백업'과 '출력 형식' 캡션의 그룹 경계 구분용 세퍼레이터 */}
       <div aria-hidden className="h-4 w-px bg-border max-md:hidden" />
-      {/* H3: 390px에서 라벨이 2줄로 꺾이지 않도록 모바일은 라벨 상단 + 칩 풀폭 스택 (stage0 패턴) */}
-      <div className="flex w-full flex-col items-start gap-1.5 md:w-auto md:flex-row md:items-center md:gap-2">
+      {/* H3: 390px에서 라벨이 2줄로 꺾이지 않도록 모바일은 라벨 상단 + 칩 풀폭 스택 (stage0 패턴).
+          모바일에서는 맨 아래로 — ja 375px에서는 버튼 3개가 한 줄에 들어가지 않아 백업만, 그 아래 URL 공유만
+          한 줄씩 차지했다. 형식 칩을 내리면 백업과 URL 공유가 같은 줄에 놓인다 */}
+      <div className="flex w-full flex-col items-start gap-1.5 max-md:order-last md:w-auto md:flex-row md:items-center md:gap-2">
         <span className="whitespace-nowrap text-sm text-muted-foreground">{t('labelFormat')}</span>
         <ToggleGroup
           className="max-md:w-full"
@@ -80,7 +81,8 @@ export default function ActionBar({
           ))}
         </ToggleGroup>
       </div>
-      <Button variant="outline" className="ml-auto" onClick={onShare}>
+      {/* 모바일에서는 백업과 같은 줄에 놓이므로 같은 크기로 */}
+      <Button variant="outline" className="ml-auto max-md:h-8 max-md:px-3 max-md:text-xs" onClick={onShare}>
         <ShareIcon />
         {t('labelShare')}
       </Button>

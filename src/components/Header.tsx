@@ -27,7 +27,8 @@ export default function Header({
   const { theme, toggle } = useTheme();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur">
+    // 상단 고정은 md 이상에서만 — 모바일에서는 헤더가 3줄(127px)이라 고정하면 화면의 16%를 항상 가린다
+    <header className="z-40 border-b border-border bg-card/80 backdrop-blur md:sticky md:top-0">
       {/* M3: 본문 카드(max-w-5xl)와 좌측 에지 정렬 */}
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         <div className="flex items-baseline gap-3">
@@ -68,8 +69,8 @@ export default function Header({
             size="icon-sm"
             onClick={toggle}
             aria-pressed={theme === 'dark'}
-            aria-label="Toggle theme"
-            title="Toggle theme"
+            aria-label={t('toggleTheme')}
+            title={t('toggleTheme')}
           >
             {theme === 'light' ? <SunIcon /> : <MoonIcon />}
           </Button>

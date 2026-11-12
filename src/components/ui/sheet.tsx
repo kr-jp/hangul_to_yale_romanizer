@@ -18,13 +18,18 @@ function SheetContent({
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
       <DialogPrimitive.Content
         className={cn(
-          'fixed inset-y-0 z-50 flex w-full max-w-md flex-col border-border bg-card shadow-xl transition data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:duration-300 data-[state=closed]:duration-200',
+          'fixed inset-y-0 z-50 flex w-full max-w-md flex-col border-border bg-card shadow-xl outline-none transition data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:duration-300 data-[state=closed]:duration-200',
           side === 'right' &&
             'right-0 border-l data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right',
           side === 'left' &&
             'left-0 border-r data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left',
           className,
         )}
+        // 열릴 때 포커스는 패널 자체에 둔다 — 기본값(첫 번째 버튼)이면 히스토리·사전에서 '모두 지우기'에 포커스가 간다
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).focus();
+        }}
         {...props}
       >
         {children}

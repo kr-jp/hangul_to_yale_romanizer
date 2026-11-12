@@ -28,8 +28,10 @@ export function useHistory(): UseHistoryValue {
   // 정렬: 핀 우선 → 최신순 (§4.8)
   const items = useMemo(
     () => loadHistory().sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.id - a.id),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- revision은 localStorage를 다시 읽게 하는 신호
     [revision],
   );
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 위와 같음
   const allTags = useMemo(() => getAllTags(), [revision]);
 
   const togglePin = useCallback(

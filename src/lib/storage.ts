@@ -11,12 +11,14 @@ export const KEYS = {
   keepHyphens: 'yaleKeepHyphenV1',
   userDict: 'yaleUserDictV1',
   dictRemember: 'yaleDictRememberV1',
+  direction: 'yaleDirectionV1',
 } as const;
 
 // 'gloss'(TSV)는 UI에서 제거됨(2026-06-12) — 구버전 localStorage·공유 URL의 'gloss'는 plain으로 폴백
 const VALID_FORMATS = new Set<string>(['plain', 'latex', 'markdown']);
 const VALID_LANGS = new Set<string>(['ja', 'ko']);
 const VALID_THEMES = new Set<string>(['dark', 'light']);
+const VALID_DIRECTIONS = new Set<string>(['h2y', 'y2h']);
 
 const HIST_MAX = 50;
 // 이보다 긴 입력은 히스토리에 남기지 않는다 — localStorage(약 5MB) 보호. 대용량 파일 변환은 기록 대상이 아님
@@ -51,8 +53,10 @@ export function isValidFormat(v: unknown): v is OutputFormat {
   return typeof v === 'string' && VALID_FORMATS.has(v);
 }
 
+// 저장된 값이 없으면 시스템의 다크 모드 설정을 따른다 (index.html의 FOUC 방지 스크립트와 같은 규칙)
 export function readTheme(): Theme {
-  return readSaved<Theme>(KEYS.theme, VALID_THEMES, 'light');
+  const system: Theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return readSaved<Theme>(KEYS.theme, VALID_THEMES, system);
 }
 
 export function writeTheme(theme: Theme): void {
@@ -67,6 +71,16 @@ export function readLang(): Lang {
 export function writeLang(lang: Lang): void {
   if (!VALID_LANGS.has(lang)) return;
   setItem(KEYS.lang, lang);
+}
+
+// 변환 방향 — 다시 열어도 마지막에 쓰던 방향으로 (2026-11-12. 예전에는 항상 한글 → Yale로 돌아갔다)
+export function readDirection(): Direction {
+  return readSaved<Direction>(KEYS.direction, VALID_DIRECTIONS, 'h2y');
+}
+
+export function writeDirection(direction: Direction): void {
+  if (!VALID_DIRECTIONS.has(direction)) return;
+  setItem(KEYS.direction, direction);
 }
 
 export function readFormat(): OutputFormat {

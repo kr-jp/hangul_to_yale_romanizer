@@ -1,7 +1,7 @@
 // 글로스 3행 출력 포맷터 (순수 함수) — 설계 문서 §2.3
 // 글로스가 없는 모든 경로는 format.js에 위임(delegation)해 바이트 동일을 구조적으로 보장한다.
 // 2행 출력 로직을 재구현하지 않는다 — format.js는 import만 (불가침).
-import { formatOutput, formatSingleExample } from '../converter/format.js';
+import { escapeLatex, escapeMarkdownCell, formatOutput, formatSingleExample } from '../converter/format.js';
 
 // examples에 글로스 부착: lines[i]가 glosses의 키면 examples[i]에 gloss 배열 부착.
 // 배열 길이는 토큰 수로 패딩/절단 (빈 셀 = ''). 키 미스매치 줄은 원본 그대로(무부착).
@@ -46,17 +46,17 @@ function glossedLatex(examples) {
   for (const ex of examples) {
     lines.push('\\ex');
     if (exampleHasGloss(ex)) {
-      lines.push(`\\glll ${ex.tokens.join(' ')} \\\\`);
-      lines.push(`      ${ex.romas.join(' ')} \\\\`);
+      lines.push(`\\glll ${ex.tokens.map(escapeLatex).join(' ')} \\\\`);
+      lines.push(`      ${ex.romas.map(escapeLatex).join(' ')} \\\\`);
       // 빈 셀은 '{}', 공백 포함 셀(다단어 글로스)은 '{...}'로 감싸 \glll 청크 수를 보존
       lines.push(`      ${ex.gloss.map((g) => {
-        const cell = g.trim();
+        const cell = escapeLatex(g.trim());
         if (cell === '') return '{}';
         return /\s/.test(cell) ? `{${cell}}` : cell;
       }).join(' ')} \\\\`);
     } else {
-      lines.push(`\\gll ${ex.tokens.join(' ')} \\\\`);
-      lines.push(`     ${ex.romas.join(' ')} \\\\`);
+      lines.push(`\\gll ${ex.tokens.map(escapeLatex).join(' ')} \\\\`);
+      lines.push(`     ${ex.romas.map(escapeLatex).join(' ')} \\\\`);
     }
     lines.push("\\trans `'");
   }
@@ -69,10 +69,10 @@ function glossedMarkdown(examples, numbered) {
   const out = [];
   examples.forEach((ex, i) => {
     if (numbered) out.push(`(${i + 1})`);
-    out.push('| ' + ex.tokens.join(' | ') + ' |');
+    out.push('| ' + ex.tokens.map(escapeMarkdownCell).join(' | ') + ' |');
     out.push('|' + ex.tokens.map(() => '---').join('|') + '|');
-    out.push('| ' + ex.romas.join(' | ') + ' |');
-    if (exampleHasGloss(ex)) out.push('| ' + ex.gloss.join(' | ') + ' |');
+    out.push('| ' + ex.romas.map(escapeMarkdownCell).join(' | ') + ' |');
+    if (exampleHasGloss(ex)) out.push('| ' + ex.gloss.map(escapeMarkdownCell).join(' | ') + ' |');
     if (i < examples.length - 1) out.push('');
   });
   return out.join('\n');

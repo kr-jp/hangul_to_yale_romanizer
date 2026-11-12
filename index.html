@@ -3,15 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hangul → Yale Romanizer</title>
+    <title>Hangul ↔ Yale Romanizer</title>
+    <meta name="description" content="Hangul ↔ Yale romanization converter for Korean linguistics — interlinear glosses, LaTeX (gb4e) and Markdown output.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="icon" href="/assets/logo/favicon.png">
     <script>
-      // FOUC 방지: React 마운트 전에 저장된 테마를 적용
+      // FOUC 방지: React 마운트 전에 테마를 적용 — 저장된 값, 없으면 시스템 설정 (storage.ts readTheme과 같은 규칙)
       try {
-        if (localStorage.getItem('yaleThemeV1') === 'dark') {
+        var saved = localStorage.getItem('yaleThemeV1');
+        if (saved === 'dark' || (saved !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) {
           document.documentElement.classList.add('dark');
         }
       } catch (e) {}
