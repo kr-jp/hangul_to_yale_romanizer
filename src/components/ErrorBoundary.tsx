@@ -17,9 +17,11 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, Er
     console.error('[Yale] 렌더링 오류:', error, info.componentStack);
   }
 
-  // 공유 URL 등 잘못된 상태가 원인일 수 있으므로 쿼리를 떼고 다시 연다
+  // 공유 URL 등 잘못된 상태가 원인일 수 있으므로 쿼리·프래그먼트를 떼고 다시 연다
+  // (프래그먼트만 다른 주소로 가는 것은 다시 로드되지 않으므로, 주소를 바꾼 뒤 직접 다시 로드)
   private reset = () => {
-    window.location.replace(window.location.pathname);
+    window.history.replaceState(null, '', window.location.pathname);
+    window.location.reload();
   };
 
   render() {

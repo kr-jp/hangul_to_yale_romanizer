@@ -26,6 +26,14 @@
   --input: oklch(0.88 0.01 262);
   --ring: oklch(0.585 0.204 277);
   --radius: 0.625rem;
+  /* 한자는 UI 언어의 글자꼴로 그린다. 일본어 UI에서 KR 폰트가 앞에 있으면 換·履·直 등이 한국식 자형으로 그려지고,
+     KR 폰트에 없는 신자체(変·歴 등)만 JP 폰트로 떨어져 한 단어 안에 두 폰트가 섞인다.
+     한글은 JP 폰트에 없으므로 어느 순서든 KR 폰트로 그려진다 */
+  --font-cjk: "Noto Sans KR", "Noto Sans JP";
+}
+
+:root:lang(ja) {
+  --font-cjk: "Noto Sans JP", "Noto Sans KR";
 }
 
 .dark {
@@ -74,7 +82,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Inter", "Noto Sans KR", "Noto Sans JP", system-ui, sans-serif;
+  --font-sans: "Inter", var(--font-cjk), system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 

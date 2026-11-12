@@ -21,14 +21,26 @@ export function formatLeipzigTSV(examples, { numbered = false } = {}) {
   return out.join('\n');
 }
 
+// LaTeX에서 줄을 깨뜨리는 글자만 이스케이프 — %는 그 뒤(줄 끝의 \\ 포함)를 주석으로 만들고 #·&는 컴파일 오류를 낸다
+// (언어학 예문의 판단 기호 #·%로 흔하다). _ ^ $ \ { } ~ 는 gb4e 지표(John_i)·명령(\textsc{nom})처럼
+// 일부러 쓰는 경우가 있어 그대로 둔다. 이미 \가 붙어 있으면 건드리지 않는다
+export function escapeLatex(s) {
+  return s.replace(/(?<!\\)[%#&]/g, '\\$&');
+}
+
+// Markdown 표에서 셀을 나누는 | 이스케이프 (이미 \| 이면 그대로)
+export function escapeMarkdownCell(s) {
+  return s.replace(/(?<!\\)\|/g, '\\|');
+}
+
 // LaTeX (gb4e 패키지)
 export function formatLatex(examples) {
   if (!examples.length) return '';
   const lines = ['\\begin{exe}'];
   for (const ex of examples) {
     lines.push('\\ex');
-    lines.push(`\\gll ${ex.tokens.join(' ')} \\\\`);
-    lines.push(`     ${ex.romas.join(' ')} \\\\`);
+    lines.push(`\\gll ${ex.tokens.map(escapeLatex).join(' ')} \\\\`);
+    lines.push(`     ${ex.romas.map(escapeLatex).join(' ')} \\\\`);
     lines.push("\\trans `'");
   }
   lines.push('\\end{exe}');
@@ -40,9 +52,9 @@ export function formatMarkdown(examples, { numbered = false } = {}) {
   const out = [];
   examples.forEach((ex, i) => {
     if (numbered) out.push(`(${i + 1})`);
-    out.push('| ' + ex.tokens.join(' | ') + ' |');
+    out.push('| ' + ex.tokens.map(escapeMarkdownCell).join(' | ') + ' |');
     out.push('|' + ex.tokens.map(() => '---').join('|') + '|');
-    out.push('| ' + ex.romas.join(' | ') + ' |');
+    out.push('| ' + ex.romas.map(escapeMarkdownCell).join(' | ') + ' |');
     if (i < examples.length - 1) out.push('');
   });
   return out.join('\n');

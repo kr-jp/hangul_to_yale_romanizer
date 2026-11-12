@@ -91,7 +91,7 @@ export interface YaleCandidate {
   dict?: boolean;
 }
 
-// URL ?s= 의 JSON shape — 키명 1글자 그대로 유지 (§3)
+// 공유 URL(#s=, 예전 링크는 ?s=)의 JSON shape — 키명 1글자 그대로 유지 (§3)
 // ge/g는 Stage 5 신규 선택 키 — 부재 시 off/빈 Map (기존 URL 완전 호환)
 export interface ShareState {
   d: Direction;

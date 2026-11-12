@@ -104,7 +104,13 @@
     "editSegmentUnaligned": "入力を「-」の区切りに対応づけられないため、全体一致だけ選べます。区切りごとに直すには「-」で区切って入力してください。",
     "editSegmentMixed": "子音だけの部分を変えたか、同じ部分に別の値を入れたため、全体一致だけ選べます。",
     "editShortSegment": "1音節の部分は標準の Yale の別の綴りと重なりやすいため、既定では全体一致にしています。",
-    "editPickHint": "クリックで入力欄へ（ダブルクリックですぐ適用）"
+    "editPickHint": "クリックで入力欄へ（ダブルクリックですぐ適用）",
+    "noCopyContent": "コピーする内容がありません",
+    "copyFailed": "コピーできませんでした",
+    "copyExample": "この例文をコピー",
+    "toggleTheme": "テーマ切り替え",
+    "directionLabel": "変換方向",
+    "fileReadError": "ファイルを読み込めませんでした"
   },
   "ko": {
     "openHist": "변환 기록",
@@ -211,6 +217,12 @@
     "editSegmentUnaligned": "입력을 \"-\" 구간에 맞출 수 없어 전체 일치만 고를 수 있습니다. 구간별로 고치려면 \"-\"로 나눠 입력해 주세요.",
     "editSegmentMixed": "자음만으로 된 부분을 바꿨거나 같은 부분에 다른 값을 넣어 전체 일치만 고를 수 있습니다.",
     "editShortSegment": "1음절 부분은 표준 Yale의 다른 표기와 겹치기 쉬워 기본값을 전체 일치로 했습니다.",
-    "editPickHint": "클릭하면 입력 칸으로 (더블클릭하면 바로 적용)"
+    "editPickHint": "클릭하면 입력 칸으로 (더블클릭하면 바로 적용)",
+    "noCopyContent": "복사할 내용이 없습니다",
+    "copyFailed": "복사하지 못했습니다",
+    "copyExample": "이 예문 복사",
+    "toggleTheme": "테마 전환",
+    "directionLabel": "변환 방향",
+    "fileReadError": "파일을 읽지 못했습니다"
   }
 }

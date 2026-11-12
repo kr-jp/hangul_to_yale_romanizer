@@ -1,7 +1,7 @@
 // 입출력 패널 — 높이 동기화 구조 (설계 문서 §5) + 출력 선택 자동복사 (§4.2) + 입력 파일 DnD (§4.7)
 // 리사이즈 핸들은 래퍼 1곳뿐 → 두 패널 높이가 정의상 항상 동일.
 // 입력 측 선택 자동복사는 사용자 결정(2026-06-12)으로 제거 — 출력 측만 유지.
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
@@ -57,6 +57,22 @@ export default function IOPanels({
   // 파일 드래그오버 시각 피드백 (원본 .dragover 클래스 상당)
   const [dragOver, setDragOver] = useState(false);
 
+  // 입력란 밖에 파일을 떨어뜨리면 브라우저가 그 파일을 열어 앱(입력 중인 내용)이 사라진다 — 창 전체에서 막는다.
+  // 입력란의 핸들러가 먼저 받은 이벤트(defaultPrevented)는 건드리지 않는다
+  useEffect(() => {
+    const block = (e: DragEvent) => {
+      if (e.defaultPrevented || !e.dataTransfer?.types?.includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', block);
+    window.addEventListener('drop', block);
+    return () => {
+      window.removeEventListener('dragover', block);
+      window.removeEventListener('drop', block);
+    };
+  }, []);
+
   // dragenter/dragover: 파일 드래그일 때만 preventDefault + 스타일 (원본 dom.js와 동일)
   function handleDragOver(e: React.DragEvent<HTMLTextAreaElement>) {
     if (!e.dataTransfer?.types?.includes('Files')) return;
@@ -85,7 +101,7 @@ export default function IOPanels({
     }
     const reader = new FileReader();
     reader.onload = () => onInputChange(String(reader.result || ''));
-    reader.onerror = () => toast('Read error', { duration: 2000 });
+    reader.onerror = () => toast(t('fileReadError'), { duration: 2000 });
     reader.readAsText(file);
   }
 
@@ -99,7 +115,7 @@ export default function IOPanels({
       if (!sel) return;
       const text = format === 'plain' && tabCopy ? sel.replace(/[^\S\r\n]+/g, '\t') : sel;
       onCopied?.();
-      void copyText(text).then(() => toast(t('copied'), { duration: 2000 }));
+      void copyText(text).then((ok) => toast(t(ok ? 'copied' : 'copyFailed'), { duration: 2000 }));
     }, 10);
   }
 

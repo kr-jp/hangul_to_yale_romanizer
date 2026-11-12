@@ -21,10 +21,10 @@ export function encodeShareState(s: ShareState): string {
   return b64UrlEncode(JSON.stringify(s));
 }
 
-// ?s= 파라미터 디코딩. 없거나 파싱 실패 시 null (실패는 console.warn — 원본 동작)
-export function decodeShareState(search: string): ShareState | null {
-  const params = new URLSearchParams(search);
-  const s = params.get('s');
+// 공유 데이터 디코딩 — #s= (2026-11부터 만드는 링크), 없으면 ?s= (그 전에 공유된 링크).
+// 없거나 파싱 실패 시 null (실패는 console.warn — 원본 동작)
+export function decodeShareState(search: string, hash = ''): ShareState | null {
+  const s = new URLSearchParams(hash.replace(/^#/, '')).get('s') || new URLSearchParams(search).get('s');
   if (!s) return null;
   try {
     return sanitizeShareState(JSON.parse(b64UrlDecode(s)));
@@ -78,6 +78,8 @@ export function sanitizeShareState(raw: unknown): ShareState | null {
   return out;
 }
 
+// 데이터는 프래그먼트(#s=)에 싣는다 — 프래그먼트는 서버로 전송되지 않는다.
+// ?s= 로 실으면 URL이 약 1만 자(한글 약 2,500자 분량의 입력)를 넘을 때 호스팅이 414로 거절해 링크가 열리지 않았다
 export function buildShareUrl(s: ShareState): string {
-  return location.origin + location.pathname + '?s=' + encodeShareState(s);
+  return location.origin + location.pathname + '#s=' + encodeShareState(s);
 }
